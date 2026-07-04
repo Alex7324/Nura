@@ -5,6 +5,10 @@
 *.obj
 piccolo
 piccolo_dbg
+nura
+nura_dbg
+nura_flow
+env_demo
 
 # File di debug
 *.pdb
