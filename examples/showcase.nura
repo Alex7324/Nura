@@ -1,0 +1,56 @@
+// showcase.nura — le cose piu' avanzate che Nura sa fare.
+// Eseguilo con:  nura examples/showcase.nura
+
+// -------------------------------------------------------------------
+// 1) OGGETTI con stato privato, costruiti con le CLOSURES.
+//    'saldo' e' incapsulato: si tocca solo tramite i "messaggi".
+//    E' programmazione a oggetti... senza classi!
+// -------------------------------------------------------------------
+fun conto(iniziale) {
+    var saldo = iniziale;
+    fun op(comando, importo) {
+        if (comando == "deposita") { saldo = saldo + importo; }
+        if (comando == "preleva")  { saldo = saldo - importo; }
+        return saldo;
+    }
+    return op;
+}
+
+var c = conto(100);
+print c("deposita", 50);      // 150
+print c("preleva", 30);       // 120
+
+// -------------------------------------------------------------------
+// 2) FUNZIONI DI ORDINE SUPERIORE: funzioni che ricevono e restituiscono
+//    funzioni. componi(f, g) crea la funzione x -> f(g(x)).
+// -------------------------------------------------------------------
+fun componi(f, g) {
+    fun composta(x) { return f(g(x)); }
+    return composta;
+}
+fun doppio(x) { return x * 2; }
+fun inc(x)    { return x + 1; }
+
+print componi(doppio, inc)(5);   // doppio(inc(5)) = 12
+
+// -------------------------------------------------------------------
+// 3) RICORSIONE spinta: la funzione di Ackermann, che cresce a valanga.
+// -------------------------------------------------------------------
+fun ack(m, n) {
+    if (m == 0) { return n + 1; }
+    if (n == 0) { return ack(m - 1, 1); }
+    return ack(m - 1, ack(m, n - 1));
+}
+print ack(3, 3);   // 61
+
+// -------------------------------------------------------------------
+// 4) Il classico FizzBuzz: while + if/else + modulo + stringhe.
+// -------------------------------------------------------------------
+var i = 1;
+while (i <= 15) {
+    if (i % 15 == 0)     print "FizzBuzz";
+    else if (i % 3 == 0) print "Fizz";
+    else if (i % 5 == 0) print "Buzz";
+    else                 print i;
+    i = i + 1;
+}
