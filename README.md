@@ -78,7 +78,14 @@ Di default esegui `./nura file.nura` dalla cartella del progetto. Per usarlo da
 qualsiasi cartella come un comando vero (tipo `gcc`), va messo in una cartella del
 **PATH**.
 
-**Linux / Mac:**
+**Modo più semplice (Windows con Git Bash, Linux, Mac):**
+```sh
+sh install.sh          # compila e installa nura in una cartella del PATH
+```
+Lo script rileva il sistema e copia `nura` in `~/bin` (Windows) o `~/.local/bin`
+(Linux/Mac). Poi apri un **nuovo** terminale e usa `nura` da ovunque.
+
+**Linux / Mac (in alternativa):**
 ```sh
 make install                 # copia nura in ~/.local/bin
 nura file.nura               # ora funziona da ovunque (se ~/.local/bin e' nel PATH)
