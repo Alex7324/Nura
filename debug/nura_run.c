@@ -57,6 +57,14 @@ static const char *op_str(TokenType op) {
 static int depth;
 static void ind(void) { printf("      "); for (int i = 0; i < depth; i++) printf("  "); }
 
+/* Stato per le funzioni: 'globals' e' lo scope che ogni chiamata racchiude;
+ * 'returning'/'ret_val' sono il meccanismo del return (come nell'interprete). */
+static Env *globals;
+static int returning;
+static Value ret_val;
+
+static void n_execute(Stmt *s, Env *env, int n);   /* dichiarazione anticipata */
+
 static Value n_eval(Expr *e, Env *env) {
     switch (e->type) {
         case EXPR_NUMBER: return value_number(e->as.number.value);
@@ -154,6 +162,42 @@ static Value n_eval(Expr *e, Env *env) {
             printf(" -> "); value_print(res); printf("\n");
             return res;
         }
+
+        case EXPR_CALL: {
+            Value callee = n_eval(e->as.call.callee, env);
+            if (callee.type != VAL_FUNCTION) {
+                ind(); printf("ERRORE: si possono chiamare solo le funzioni\n");
+                return value_number(0);
+            }
+            Stmt *decl = callee.as.function;
+            ind(); printf(">>> CHIAMATA a '%s'  (creo un nuovo scope)\n", decl->as.function.name);
+
+            /* nuovo scope, racchiude il globale (come nell'interprete vero) */
+            Env *call_env = malloc(sizeof(Env));   /* non liberato: leak ok per il tool */
+            env_init(call_env);
+            call_env->enclosing = globals;
+
+            for (int i = 0; i < decl->as.function.param_count && i < e->as.call.arg_count; i++) {
+                depth++;
+                Value arg = n_eval(e->as.call.args[i], env);
+                depth--;
+                env_define(call_env, decl->as.function.params[i], arg);
+                ind(); printf("    parametro %s = ", decl->as.function.params[i]);
+                value_print(arg); printf("\n");
+            }
+
+            depth++;
+            n_execute(decl->as.function.body, call_env, 1);
+            depth--;
+
+            Value result;
+            if (returning) { result = ret_val; returning = 0; }
+            else           result = value_number(0);
+
+            ind(); printf("<<< '%s' ritorna ", decl->as.function.name);
+            value_print(result); printf("\n");
+            return result;
+        }
     }
     return value_number(0);
 }
@@ -187,9 +231,15 @@ static void n_execute(Stmt *s, Env *env, int n) {
             break;
         }
         case STMT_BLOCK: {
-            printf("\n> istruzione %d:  blocco { ... }\n", n);
+            printf("\n> istruzione %d:  blocco { ... }  (nuovo scope)\n", n);
+            Env *block_env = malloc(sizeof(Env));   /* non liberato: leak ok per il tool */
+            env_init(block_env);
+            block_env->enclosing = env;
             Program *body = &s->as.block.body;
-            for (int i = 0; i < body->count; i++) n_execute(body->statements[i], env, i + 1);
+            for (int i = 0; i < body->count; i++) {
+                n_execute(body->statements[i], block_env, i + 1);
+                if (returning) break;
+            }
             break;
         }
         case STMT_IF: {
@@ -215,7 +265,29 @@ static void n_execute(Stmt *s, Env *env, int n) {
                 giro++;
                 printf("      --- giro %d (condizione vera) ---\n", giro);
                 n_execute(s->as.while_stmt.body, env, n);
+                if (returning) break;
             }
+            break;
+        }
+
+        case STMT_FUN: {
+            printf("\n> istruzione %d:  fun %s(...)  (definizione)\n", n, s->as.function.name);
+            env_define(env, s->as.function.name, value_function(s));
+            printf("      env_define(\"%s\", <funzione>)  ->  entra nella tabella\n",
+                   s->as.function.name);
+            dump_env(env);
+            break;
+        }
+
+        case STMT_RETURN: {
+            printf("\n> istruzione %d:  return ...\n", n);
+            Value v;
+            if (s->as.ret.value != NULL) v = n_eval(s->as.ret.value, env);
+            else                         v = value_number(0);
+            ret_val = v;
+            returning = 1;
+            ind(); printf("return -> "); value_print(v);
+            printf("   (risalgo fuori dalla funzione)\n");
             break;
         }
     }
@@ -239,8 +311,11 @@ int main(int argc, char **argv) {
     printf("============================================================\n");
     Env env;
     env_init(&env);
+    globals = &env;
+    returning = 0;
     for (int i = 0; i < program.count; i++) {
         n_execute(program.statements[i], &env, i + 1);
+        if (returning) break;
     }
 
     printf("\n============================================================\n");
