@@ -100,3 +100,7 @@ tests/                    suite di test automatici (make test)
 examples/                 programmi di esempio in Nura (.nura)
 Makefile                  compilazione e test (make / make test / make clean)
 ```
+
+## Licenza
+
+Distribuito con licenza MIT — vedi il file [LICENSE](LICENSE).
