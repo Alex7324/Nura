@@ -209,11 +209,20 @@ Token lexer_next_token(Lexer *lexer) {
         case '%': return make_token(lexer, TOKEN_PERCENT);
 
         /* Simboli che possono avere un '=' subito dopo.
-         * match() decide fra la versione a 1 e a 2 caratteri. */
-        case '=': return make_token(lexer, match(lexer, '=') ? TOKEN_EQ  : TOKEN_ASSIGN);
-        case '!': return make_token(lexer, match(lexer, '=') ? TOKEN_NEQ : TOKEN_BANG);
-        case '<': return make_token(lexer, match(lexer, '=') ? TOKEN_LE  : TOKEN_LT);
-        case '>': return make_token(lexer, match(lexer, '=') ? TOKEN_GE  : TOKEN_GT);
+         * match() consuma il '=' se c'e': cosi' scegliamo fra la versione
+         * a 1 carattere e quella a 2. */
+        case '=':
+            if (match(lexer, '=')) return make_token(lexer, TOKEN_EQ);
+            else                   return make_token(lexer, TOKEN_ASSIGN);
+        case '!':
+            if (match(lexer, '=')) return make_token(lexer, TOKEN_NEQ);
+            else                   return make_token(lexer, TOKEN_BANG);
+        case '<':
+            if (match(lexer, '=')) return make_token(lexer, TOKEN_LE);
+            else                   return make_token(lexer, TOKEN_LT);
+        case '>':
+            if (match(lexer, '=')) return make_token(lexer, TOKEN_GE);
+            else                   return make_token(lexer, TOKEN_GT);
     }
 
     return error_token(lexer, "Carattere non riconosciuto.");

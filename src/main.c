@@ -47,13 +47,17 @@ int main(int argc, char **argv) {
      *   nura --tokens "var n = 5;"            -> mostra i token (Fase 1)
      */
     if (argc > 1 && strcmp(argv[1], "--tokens") == 0) {
-        const char *source = (argc > 2) ? argv[2] : "var n = 5; print n * 2;";
+        const char *source;
+        if (argc > 2) source = argv[2];
+        else          source = "var n = 5; print n * 2;";
         printf("Sorgente: \"%s\"\n\n", source);
         dump_tokens(source);
         return 0;
     }
 
-    const char *source = (argc > 1) ? argv[1] : "var n = 5; print n * 2;";
+    const char *source;
+    if (argc > 1) source = argv[1];
+    else          source = "var n = 5; print n * 2;";
     run(source);
     return 0;
 }

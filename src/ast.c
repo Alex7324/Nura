@@ -157,15 +157,20 @@ static void print_tree(Expr *expr, const char *prefix, int is_last, int is_root)
     if (is_root) {
         printf("%s\n", label);
     } else {
-        printf("%s%s%s\n", prefix, is_last ? "`-- " : "|-- ", label);
+        const char *ramo;
+        if (is_last) ramo = "`-- ";
+        else         ramo = "|-- ";
+        printf("%s%s%s\n", prefix, ramo, label);
     }
 
     char child_prefix[256];
     if (is_root) {
         child_prefix[0] = '\0';
     } else {
-        snprintf(child_prefix, sizeof(child_prefix), "%s%s",
-                 prefix, is_last ? "    " : "|   ");
+        const char *pad;
+        if (is_last) pad = "    ";
+        else         pad = "|   ";
+        snprintf(child_prefix, sizeof(child_prefix), "%s%s", prefix, pad);
     }
 
     if (expr->type == EXPR_UNARY) {
@@ -245,7 +250,9 @@ void program_init(Program *program) {
  * media ogni inserimento costa O(1). */
 void program_add(Program *program, Stmt *stmt) {
     if (program->count == program->capacity) {
-        int new_capacity = (program->capacity < 8) ? 8 : program->capacity * 2;
+        int new_capacity;
+        if (program->capacity < 8) new_capacity = 8;
+        else                       new_capacity = program->capacity * 2;
         Stmt **grown = realloc(program->statements,
                                sizeof(Stmt *) * (size_t)new_capacity);
         if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }

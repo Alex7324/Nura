@@ -69,12 +69,25 @@ static double evaluate(Expr *expr, Env *env) {
                 case TOKEN_PERCENT:
                     if (right == 0) { runtime_error("modulo per zero."); return 0; }
                     return fmod(left, right);
-                case TOKEN_EQ:  return left == right ? 1.0 : 0.0;
-                case TOKEN_NEQ: return left != right ? 1.0 : 0.0;
-                case TOKEN_LT:  return left <  right ? 1.0 : 0.0;
-                case TOKEN_LE:  return left <= right ? 1.0 : 0.0;
-                case TOKEN_GT:  return left >  right ? 1.0 : 0.0;
-                case TOKEN_GE:  return left >= right ? 1.0 : 0.0;
+                /* Confronti: 1.0 = vero, 0.0 = falso (provvisorio). */
+                case TOKEN_EQ:
+                    if (left == right) return 1.0;
+                    else               return 0.0;
+                case TOKEN_NEQ:
+                    if (left != right) return 1.0;
+                    else               return 0.0;
+                case TOKEN_LT:
+                    if (left < right) return 1.0;
+                    else              return 0.0;
+                case TOKEN_LE:
+                    if (left <= right) return 1.0;
+                    else               return 0.0;
+                case TOKEN_GT:
+                    if (left > right) return 1.0;
+                    else              return 0.0;
+                case TOKEN_GE:
+                    if (left >= right) return 1.0;
+                    else               return 0.0;
                 default:        return 0;
             }
         }
