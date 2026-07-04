@@ -56,6 +56,9 @@ ambiente realizzato come **tabella hash**. Segnala sia gli
 errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
 variabile non definita, tipi incompatibili).
 
+📖 **La guida completa al linguaggio** (tutti i costrutti, con esempi) è in
+[docs/linguaggio.md](docs/linguaggio.md).
+
 Esempio (fattoriale iterativo, in `examples/fattoriale.nura`):
 
 ```
@@ -130,6 +133,7 @@ src/
 └── main.c                punto di ingresso: legge file o codice, avvia la catena
 
 debug/                    strumenti didattici per capire il funzionamento
+docs/                     guida al linguaggio (docs/linguaggio.md)
 tests/                    suite di test automatici (make test)
 examples/                 programmi di esempio in Nura (.nura)
 Makefile                  compilazione e test (make / make test / make clean)
