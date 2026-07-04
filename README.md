@@ -31,11 +31,17 @@ codice  →  [lexer]  →  token  →  [parser]  →  albero (AST)  →  [evalua
 Nura esegue programmi fatti di istruzioni, con variabili e stampa:
 
 ```sh
-gcc -Wall -Wextra -o nura src/*.c
+# compilare
+make                                    # oppure: mingw32-make (Windows/MinGW)
+                                        # oppure: gcc -std=c11 -Wall -Wextra -o nura src/*.c
 
-./nura "var n = 5; print n * 2;"       # 10
-./nura "var s = 0; s = s + 10; print s;"  # 10
-./nura --tokens "var n = 5;"           # stampa solo il flusso di token
+# eseguire
+./nura examples/demo.nura               # esegue un programma da file
+./nura -e "var n = 5; print n * 2;"     # esegue codice inline  ->  10
+./nura --tokens "var n = 5;"            # mostra i token (debug)
+
+# testare
+make test                               # esegue la suite di test automatici
 ```
 
 Gestisce: espressioni con `+ - * /`, confronti (`< <= > >= == !=`), meno unario e
@@ -87,7 +93,10 @@ src/
 ├── parser.h / parser.c   Fase 2 — token → AST
 ├── eval.h  / eval.c      Fase 3 — esecuzione dell'albero
 ├── env.h   / env.c       Fase 4 — ambiente delle variabili (tabella hash)
-└── main.c                mette insieme la catena
+└── main.c                punto di ingresso: legge file o codice, avvia la catena
 
 debug/                    strumenti didattici per capire il funzionamento
+tests/                    suite di test automatici (make test)
+examples/                 programmi di esempio in Nura (.nura)
+Makefile                  compilazione e test (make / make test / make clean)
 ```

@@ -1,0 +1,21 @@
+// Programma di esempio in Nura
+// Eseguilo con:  ./nura examples/demo.nura
+
+// area di un triangolo
+var base = 10;
+var altezza = 4;
+var area = base * altezza / 2;
+print area;            // 20
+
+// un accumulatore
+var somma = 0;
+somma = somma + 100;
+somma = somma + 50;
+print somma;           // 150
+
+// resto della divisione (operatore %)
+var n = 17;
+print n % 5;           // 2
+
+// confronti (1 = vero, 0 = falso)
+print n > 10;          // 1
