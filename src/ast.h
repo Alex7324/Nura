@@ -15,7 +15,8 @@ typedef enum {
     EXPR_BINARY,
     EXPR_LOGICAL,    /* a && b  ,  a || b   (con corto circuito)  */
     EXPR_VARIABLE,   /* lettura di una variabile:   n            */
-    EXPR_ASSIGN      /* assegnamento:               n = <expr>   */
+    EXPR_ASSIGN,     /* assegnamento:               n = <expr>   */
+    EXPR_CALL        /* chiamata di funzione:       f(a, b)      */
 } ExprType;
 
 typedef struct Expr Expr;
@@ -31,6 +32,7 @@ struct Expr {
         struct { TokenType op; Expr *left; Expr *right; } logical;   /* && oppure || */
         struct { char *name; } variable;
         struct { char *name; Expr *value; } assign;
+        struct { Expr *callee; Expr **args; int arg_count; } call;  /* f(a, b) */
     } as;
 };
 
@@ -42,6 +44,7 @@ Expr *ast_binary(TokenType op, Expr *left, Expr *right);
 Expr *ast_logical(TokenType op, Expr *left, Expr *right);
 Expr *ast_variable(const char *name, int length);
 Expr *ast_assign(const char *name, int length, Expr *value);
+Expr *ast_call(Expr *callee, Expr **args, int arg_count);
 void ast_free(Expr *expr);
 void ast_print_compact(Expr *expr);
 void ast_print_tree(Expr *expr);
@@ -73,7 +76,9 @@ typedef enum {
     STMT_EXPR,    /* expr;                            */
     STMT_BLOCK,   /* { istruzione* }                  */
     STMT_IF,      /* if (cond) ramo [else ramo]       */
-    STMT_WHILE    /* while (cond) corpo               */
+    STMT_WHILE,   /* while (cond) corpo               */
+    STMT_FUN,     /* fun nome(params) { corpo }       */
+    STMT_RETURN   /* return expr;                     */
 } StmtType;
 
 struct Stmt {
@@ -85,6 +90,8 @@ struct Stmt {
         struct { Program body; } block;
         struct { Expr *condition; Stmt *then_branch; Stmt *else_branch; } if_stmt;
         struct { Expr *condition; Stmt *body; } while_stmt;
+        struct { char *name; char **params; int param_count; Stmt *body; } function;
+        struct { Expr *value; } ret;   /* return: value puo' essere NULL */
     } as;
 };
 
@@ -94,6 +101,8 @@ Stmt *stmt_expr(Expr *expr);
 Stmt *stmt_block(Program body);
 Stmt *stmt_if(Expr *condition, Stmt *then_branch, Stmt *else_branch);
 Stmt *stmt_while(Expr *condition, Stmt *body);
+Stmt *stmt_fun(const char *name, int name_length, char **params, int param_count, Stmt *body);
+Stmt *stmt_return(Expr *value);
 void stmt_free(Stmt *stmt);
 
 #endif /* AST_H */

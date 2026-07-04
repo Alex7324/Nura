@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Copia un lessema (start..start+length) in una nuova stringa con '\0'. */
+static char *dup_lexeme(const char *start, int length) {
+    char *s = malloc((size_t)length + 1);
+    if (s == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    memcpy(s, start, (size_t)length);
+    s[length] = '\0';
+    return s;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Meccanica di base                                                 */
 /* ------------------------------------------------------------------ */
@@ -63,6 +72,7 @@ static Expr *comparison(Parser *p);
 static Expr *term(Parser *p);
 static Expr *factor(Parser *p);
 static Expr *unary(Parser *p);
+static Expr *call(Parser *p);
 static Expr *primary(Parser *p);
 
 /* expression -> assignment  (l'assegnamento e' l'operazione piu' debole) */
@@ -179,7 +189,39 @@ static Expr *unary(Parser *p) {
         Expr *right = unary(p);
         return ast_unary(op, right);
     }
-    return primary(p);
+    return call(p);
+}
+
+/* Legge la lista di argomenti dopo '(' e costruisce il nodo di chiamata.
+ * La '(' e' gia' stata consumata. */
+static Expr *finish_call(Parser *p, Expr *callee) {
+    Expr **args = NULL;
+    int count = 0;
+    int cap = 0;
+    if (!check(p, TOKEN_RPAREN)) {
+        do {
+            if (count == cap) {
+                if (cap < 4) cap = 4;
+                else         cap = cap * 2;
+                Expr **grown = realloc(args, sizeof(Expr *) * (size_t)cap);
+                if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                args = grown;
+            }
+            args[count++] = expression(p);
+        } while (match(p, TOKEN_COMMA));
+    }
+    consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo gli argomenti.");
+    return ast_call(callee, args, count);
+}
+
+/* call -> primary ( "(" argomenti? ")" )*
+ * Una cosa "atomica" (primary) seguita da zero o piu' chiamate. */
+static Expr *call(Parser *p) {
+    Expr *e = primary(p);
+    while (match(p, TOKEN_LPAREN)) {
+        e = finish_call(p, e);
+    }
+    return e;
 }
 
 /* primary -> NUMBER | IDENTIFIER | "(" expression ")" */
@@ -223,18 +265,23 @@ static Expr *primary(Parser *p) {
 
 static Stmt *statement(Parser *p);
 static Stmt *var_declaration(Parser *p);
+static Stmt *fun_declaration(Parser *p);
 static Stmt *print_statement(Parser *p);
+static Stmt *return_statement(Parser *p);
 static Stmt *expression_statement(Parser *p);
 static Stmt *block_statement(Parser *p);
 static Stmt *if_statement(Parser *p);
 static Stmt *while_statement(Parser *p);
 
-/* statement -> varDecl | printStmt | ifStmt | whileStmt | block | exprStmt */
+/* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt |
+ *              returnStmt | block | exprStmt */
 static Stmt *statement(Parser *p) {
+    if (match(p, TOKEN_FUN))    return fun_declaration(p);
     if (match(p, TOKEN_VAR))    return var_declaration(p);
     if (match(p, TOKEN_PRINT))  return print_statement(p);
     if (match(p, TOKEN_IF))     return if_statement(p);
     if (match(p, TOKEN_WHILE))  return while_statement(p);
+    if (match(p, TOKEN_RETURN)) return return_statement(p);
     if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
 }
@@ -299,6 +346,47 @@ static Stmt *while_statement(Parser *p) {
 
     Stmt *body = statement(p);
     return stmt_while(condition, body);
+}
+
+/* funDecl -> "fun" IDENTIFIER "(" ( IDENTIFIER ( "," IDENTIFIER )* )? ")" block
+ * ('fun' gia' consumato). */
+static Stmt *fun_declaration(Parser *p) {
+    Token name = p->current;
+    consume(p, TOKEN_IDENTIFIER, "Mi aspettavo il nome della funzione dopo 'fun'.");
+    consume(p, TOKEN_LPAREN, "Mi aspettavo '(' dopo il nome della funzione.");
+
+    char **params = NULL;
+    int count = 0;
+    int cap = 0;
+    if (!check(p, TOKEN_RPAREN)) {
+        do {
+            Token pname = p->current;
+            consume(p, TOKEN_IDENTIFIER, "Mi aspettavo il nome di un parametro.");
+            if (count == cap) {
+                if (cap < 4) cap = 4;
+                else         cap = cap * 2;
+                char **grown = realloc(params, sizeof(char *) * (size_t)cap);
+                if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                params = grown;
+            }
+            params[count++] = dup_lexeme(pname.start, pname.length);
+        } while (match(p, TOKEN_COMMA));
+    }
+    consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo i parametri.");
+    consume(p, TOKEN_LBRACE, "Mi aspettavo '{' per il corpo della funzione.");
+
+    Stmt *body = block_statement(p);   /* la '{' e' gia' stata consumata */
+    return stmt_fun(name.start, name.length, params, count, body);
+}
+
+/* returnStmt -> "return" expression? ";"   ('return' gia' consumato) */
+static Stmt *return_statement(Parser *p) {
+    Expr *value = NULL;
+    if (!check(p, TOKEN_SEMICOLON)) {
+        value = expression(p);   /* return con un valore */
+    }
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo il valore di 'return'.");
+    return stmt_return(value);
 }
 
 /* ------------------------------------------------------------------ */

@@ -21,9 +21,10 @@ typedef struct Entry {
     struct Entry *next;   /* prossima voce nello stesso bucket             */
 } Entry;
 
-typedef struct {
+typedef struct Env {
     Entry *buckets[ENV_CAPACITY];
     int count;
+    struct Env *enclosing;   /* lo scope che racchiude questo (NULL = globale) */
 } Env;
 
 void env_init(Env *env);

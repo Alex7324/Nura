@@ -26,6 +26,13 @@ Value value_string(char *s) {
     return v;
 }
 
+Value value_function(struct Stmt *decl) {
+    Value v;
+    v.type = VAL_FUNCTION;
+    v.as.function = decl;
+    return v;
+}
+
 /* Copia profonda: per una stringa ne alloca una nuova copia; per numeri e
  * booleani non c'e' niente da copiare (si ritorna il valore com'e'). */
 Value value_copy(Value v) {
@@ -46,9 +53,10 @@ void value_free(Value v) {
  * "vero" (una stringa, anche vuota, e' vera). Serve a if, while, ! , && , ||. */
 int value_is_truthy(Value v) {
     switch (v.type) {
-        case VAL_BOOL:   return v.as.boolean;
-        case VAL_NUMBER: return v.as.number != 0;
-        case VAL_STRING: return 1;
+        case VAL_BOOL:     return v.as.boolean;
+        case VAL_NUMBER:   return v.as.number != 0;
+        case VAL_STRING:   return 1;
+        case VAL_FUNCTION: return 1;
     }
     return 0;
 }
@@ -58,9 +66,10 @@ int value_is_truthy(Value v) {
 int values_equal(Value a, Value b) {
     if (a.type != b.type) return 0;
     switch (a.type) {
-        case VAL_NUMBER: return a.as.number == b.as.number;
-        case VAL_BOOL:   return a.as.boolean == b.as.boolean;
-        case VAL_STRING: return strcmp(a.as.string, b.as.string) == 0;
+        case VAL_NUMBER:   return a.as.number == b.as.number;
+        case VAL_BOOL:     return a.as.boolean == b.as.boolean;
+        case VAL_STRING:   return strcmp(a.as.string, b.as.string) == 0;
+        case VAL_FUNCTION: return a.as.function == b.as.function;
     }
     return 0;
 }
@@ -77,14 +86,18 @@ void value_print(Value v) {
         case VAL_STRING:
             printf("%s", v.as.string);
             break;
+        case VAL_FUNCTION:
+            printf("<funzione>");
+            break;
     }
 }
 
 const char *value_type_name(ValueType t) {
     switch (t) {
-        case VAL_NUMBER: return "numero";
-        case VAL_BOOL:   return "booleano";
-        case VAL_STRING: return "stringa";
+        case VAL_NUMBER:   return "numero";
+        case VAL_BOOL:     return "booleano";
+        case VAL_STRING:   return "stringa";
+        case VAL_FUNCTION: return "funzione";
     }
     return "?";
 }

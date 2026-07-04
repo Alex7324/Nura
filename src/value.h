@@ -19,18 +19,22 @@
  * senza preoccuparsi di chi libera cosa.
  */
 
+struct Stmt;   /* dichiarazione anticipata: una funzione punta al suo nodo AST */
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
-    VAL_STRING
+    VAL_STRING,
+    VAL_FUNCTION
 } ValueType;
 
 typedef struct {
     ValueType type;
     union {
         double number;
-        int boolean;    /* 0 = false, 1 = true */
-        char *string;   /* puntatore "in prestito" (non posseduto) */
+        int boolean;            /* 0 = false, 1 = true */
+        char *string;           /* puntatore "in prestito" (non posseduto) */
+        struct Stmt *function;  /* punta al nodo STMT_FUN nell'AST */
     } as;
 } Value;
 
@@ -38,6 +42,7 @@ typedef struct {
 Value value_number(double n);
 Value value_bool(int b);
 Value value_string(char *s);
+Value value_function(struct Stmt *decl);
 
 /* Gestione memoria delle stringhe.
  * value_copy: copia profonda (duplica la stringa) — usata dall'ambiente, che

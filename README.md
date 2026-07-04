@@ -49,8 +49,9 @@ Tre tipi di valore: **numeri**, **booleani** (`true`/`false`) e **stringhe**
 (`"..."`, concatenabili con `+`). Gestisce: espressioni con `+ - * / %`, confronti
 (`< <= > >= == !=`), operatori logici `&&` e `||` (con corto circuito), meno unario
 e il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
-**`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }`. Le
-variabili vivono in un ambiente realizzato come **tabella hash**. Segnala sia gli
+**`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }` con
+scope locale; **funzioni** (`fun`, `return`) con **ricorsione**. Le variabili
+vivono in un ambiente realizzato come **tabella hash**. Segnala sia gli
 errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
 variabile non definita, tipi incompatibili).
 
@@ -67,22 +68,19 @@ while (k <= n) {
 print risultato;   // 120
 ```
 
-## Dove voglio arrivare
+## Il traguardo (raggiunto ✅)
 
-L'obiettivo è arrivare a eseguire un programma come questo:
+Il programma-obiettivo di Nura — variabili, condizioni e funzioni ricorsive — ora
+**gira** (`examples/fattoriale_ricorsivo.nura`):
 
 ```
-var n = 5;
-
 fun fattoriale(k) {
     if (k <= 1) { return 1; }
     return k * fattoriale(k - 1);
 }
 
-print fattoriale(n);   // 120
+print fattoriale(5);   // 120
 ```
-
-Cioè: variabili, condizioni, cicli, e funzioni che possono richiamare sé stesse.
 
 ## Roadmap
 
@@ -91,7 +89,7 @@ Cioè: variabili, condizioni, cicli, e funzioni che possono richiamare sé stess
 - [x] **Fase 3 — Evaluator**: percorrere l'albero e calcolare
 - [x] **Fase 4 — Variabili e ambiente**: `var`, assegnamento, `print`, tabella hash nome → valore
 - [x] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`, operatore `!`
-- [ ] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione
+- [x] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione, scope locale
 
 ## Come l'ho sviluppato
 

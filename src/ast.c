@@ -84,6 +84,14 @@ Expr *ast_assign(const char *name, int length, Expr *value) {
     return e;
 }
 
+Expr *ast_call(Expr *callee, Expr **args, int arg_count) {
+    Expr *e = new_expr(EXPR_CALL);
+    e->as.call.callee = callee;
+    e->as.call.args = args;          /* prende possesso dell'array di argomenti */
+    e->as.call.arg_count = arg_count;
+    return e;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Liberazione (post-order)                                          */
 /* ------------------------------------------------------------------ */
@@ -115,6 +123,13 @@ void ast_free(Expr *expr) {
         case EXPR_ASSIGN:
             free(expr->as.assign.name);
             ast_free(expr->as.assign.value);
+            break;
+        case EXPR_CALL:
+            ast_free(expr->as.call.callee);
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                ast_free(expr->as.call.args[i]);
+            }
+            free(expr->as.call.args);
             break;
     }
     free(expr);
@@ -183,6 +198,15 @@ void ast_print_compact(Expr *expr) {
             ast_print_compact(expr->as.assign.value);
             printf(")");
             break;
+        case EXPR_CALL:
+            printf("(call ");
+            ast_print_compact(expr->as.call.callee);
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                printf(" ");
+                ast_print_compact(expr->as.call.args[i]);
+            }
+            printf(")");
+            break;
     }
 }
 
@@ -199,6 +223,7 @@ static void node_label(Expr *expr, char *buf, size_t n) {
         case EXPR_LOGICAL:  snprintf(buf, n, "(%s)", op_str(expr->as.logical.op)); break;
         case EXPR_VARIABLE: snprintf(buf, n, "%s", expr->as.variable.name); break;
         case EXPR_ASSIGN:   snprintf(buf, n, "(= %s)", expr->as.assign.name); break;
+        case EXPR_CALL:     snprintf(buf, n, "(call)"); break;
     }
 }
 
@@ -235,6 +260,12 @@ static void print_tree(Expr *expr, const char *prefix, int is_last, int is_root)
         print_tree(expr->as.logical.right, child_prefix, 1, 0);
     } else if (expr->type == EXPR_ASSIGN) {
         print_tree(expr->as.assign.value, child_prefix, 1, 0);
+    } else if (expr->type == EXPR_CALL) {
+        int last = expr->as.call.arg_count;   /* indice dell'ultimo figlio */
+        print_tree(expr->as.call.callee, child_prefix, last == 0, 0);
+        for (int i = 0; i < expr->as.call.arg_count; i++) {
+            print_tree(expr->as.call.args[i], child_prefix, i == last - 1, 0);
+        }
     }
     /* EXPR_NUMBER e EXPR_VARIABLE sono foglie: nessun figlio */
 }
@@ -294,6 +325,21 @@ Stmt *stmt_while(Expr *condition, Stmt *body) {
     return s;
 }
 
+Stmt *stmt_fun(const char *name, int name_length, char **params, int param_count, Stmt *body) {
+    Stmt *s = new_stmt(STMT_FUN);
+    s->as.function.name = copy_name(name, name_length);
+    s->as.function.params = params;   /* prende possesso dell'array di parametri */
+    s->as.function.param_count = param_count;
+    s->as.function.body = body;
+    return s;
+}
+
+Stmt *stmt_return(Expr *value) {
+    Stmt *s = new_stmt(STMT_RETURN);
+    s->as.ret.value = value;   /* puo' essere NULL (return senza valore) */
+    return s;
+}
+
 void stmt_free(Stmt *stmt) {
     if (stmt == NULL) return;
     switch (stmt->type) {
@@ -318,6 +364,17 @@ void stmt_free(Stmt *stmt) {
         case STMT_WHILE:
             ast_free(stmt->as.while_stmt.condition);
             stmt_free(stmt->as.while_stmt.body);
+            break;
+        case STMT_FUN:
+            free(stmt->as.function.name);
+            for (int i = 0; i < stmt->as.function.param_count; i++) {
+                free(stmt->as.function.params[i]);
+            }
+            free(stmt->as.function.params);
+            stmt_free(stmt->as.function.body);
+            break;
+        case STMT_RETURN:
+            ast_free(stmt->as.ret.value);   /* ast_free gestisce NULL */
             break;
     }
     free(stmt);

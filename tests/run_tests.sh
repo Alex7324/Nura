@@ -84,6 +84,18 @@ check "confronto stringhe"   'print "a" == "a";'                         "true"
 check "tipi diversi diversi" "print true == 1;"                          "false"
 check "stringa e' vera"      'if ("x") print 1;'                         "1"
 
+echo "== Fase 6: funzioni =="
+check "funzione semplice"    "fun somma(a, b) { return a + b; } print somma(3, 4);"                       "7"
+check "fattoriale ricorsivo" "fun f(k) { if (k <= 1) { return 1; } return k * f(k - 1); } print f(5);"    "120"
+check "fibonacci"            "fun fib(n) { if (n < 2) { return n; } return fib(n-1) + fib(n-2); } print fib(10);" "55"
+check "funzione con stringa" 'fun s(n) { return "Ciao " + n; } print s("Nura");'                          "Ciao Nura"
+check "senza return da' 0"   "fun f() { } print f();"                                                     "0"
+check "scope: param locale"  "fun f(x) { return x; } var x = 99; print f(1); print x;"                    "1
+99"
+check "scope blocco locale"  "{ var x = 5; } print x;"     "Errore a runtime: variabile 'x' non definita."
+check "argomenti errati"     "fun f(a) { return a; } print f(1, 2);"  "Errore a runtime: la funzione 'f' vuole 1 argomenti, ne hai passati 2."
+check "chiamo un numero"     "print 5(3);"                 "Errore a runtime: si possono chiamare solo le funzioni."
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

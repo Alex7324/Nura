@@ -1,0 +1,10 @@
+// Il fattoriale in versione RICORSIVA: il traguardo di Nura.
+// La funzione richiama se stessa, con k che cala fino al caso base.
+// Eseguilo con:  ./nura examples/fattoriale_ricorsivo.nura
+
+fun fattoriale(k) {
+    if (k <= 1) { return 1; }
+    return k * fattoriale(k - 1);
+}
+
+print fattoriale(5);   // 120

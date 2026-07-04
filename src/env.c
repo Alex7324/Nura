@@ -9,6 +9,7 @@ void env_init(Env *env) {
         env->buckets[i] = NULL;   /* ogni bucket parte come lista vuota */
     }
     env->count = 0;
+    env->enclosing = NULL;        /* lo scope racchiudente lo imposta il chiamante */
 }
 
 /*
@@ -72,17 +73,22 @@ void env_define(Env *env, const char *name, Value value) {
 
 int env_get(Env *env, const char *name, Value *out) {
     Entry *e = find_entry(env, name);
-    if (e == NULL) return 0;   /* non trovata */
-    *out = e->value;
-    return 1;
+    if (e != NULL) { *out = e->value; return 1; }
+    /* non trovata qui: cerchiamo nello scope che ci racchiude */
+    if (env->enclosing != NULL) return env_get(env->enclosing, name, out);
+    return 0;
 }
 
 int env_assign(Env *env, const char *name, Value value) {
     Entry *e = find_entry(env, name);
-    if (e == NULL) return 0;   /* non si puo' assegnare a cio' che non esiste */
-    value_free(e->value);
-    e->value = value_copy(value);
-    return 1;
+    if (e != NULL) {
+        value_free(e->value);
+        e->value = value_copy(value);
+        return 1;
+    }
+    /* non e' qui: proviamo ad assegnare nello scope racchiudente */
+    if (env->enclosing != NULL) return env_assign(env->enclosing, name, value);
+    return 0;   /* non esiste in nessuno scope */
 }
 
 void env_free(Env *env) {

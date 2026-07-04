@@ -13,12 +13,19 @@
  *     (es. dalle concatenazioni), liberate tutte alla fine del programma.
  */
 typedef struct {
-    Env *env;
+    Env *env;          /* scope corrente */
+    Env *globals;      /* scope globale (i corpi delle funzioni lo racchiudono) */
     int had_error;
+    int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
+    Value return_value;
     char **strings;
     int str_count;
     int str_cap;
 } Interp;
+
+/* evaluate chiama execute (per le chiamate di funzione) e viceversa:
+ * dichiarazione anticipata. */
+static void execute(Stmt *stmt, Interp *it);
 
 static void runtime_error(Interp *it, const char *message) {
     if (it->had_error) return;
@@ -174,6 +181,70 @@ static Value evaluate(Expr *expr, Interp *it) {
             if (it->had_error) return r;
             return value_bool(is_truthy(r));
         }
+
+        case EXPR_CALL: {
+            Value callee = evaluate(expr->as.call.callee, it);
+            if (it->had_error) return callee;
+            if (callee.type != VAL_FUNCTION) {
+                runtime_error(it, "si possono chiamare solo le funzioni.");
+                return value_number(0);
+            }
+
+            Stmt *decl = callee.as.function;
+            int argc = expr->as.call.arg_count;
+            int paramc = decl->as.function.param_count;
+            if (argc != paramc) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "la funzione '%s' vuole %d argomenti, ne hai passati %d.",
+                         decl->as.function.name, paramc, argc);
+                runtime_error(it, msg);
+                return value_number(0);
+            }
+
+            /* Nuovo scope per la chiamata: racchiude il GLOBALE (scope lessicale),
+             * cosi' la funzione vede se stessa (ricorsione) e le variabili globali,
+             * ma NON le variabili locali del chiamante. */
+            Env call_env;
+            env_init(&call_env);
+            call_env.enclosing = it->globals;
+
+            /* Valuta gli argomenti nello scope del chiamante, legali ai parametri. */
+            for (int i = 0; i < paramc; i++) {
+                Value arg = evaluate(expr->as.call.args[i], it);
+                if (it->had_error) { env_free(&call_env); return value_number(0); }
+                env_define(&call_env, decl->as.function.params[i], arg);
+            }
+
+            /* Esegui il corpo nello scope della chiamata. */
+            Env *saved = it->env;
+            it->env = &call_env;
+            execute(decl->as.function.body, it);
+            it->env = saved;
+
+            /* Recupera il valore di ritorno (0 se la funzione non fa 'return'). */
+            Value result;
+            if (it->is_returning) {
+                result = it->return_value;
+                it->is_returning = 0;
+            } else {
+                result = value_number(0);
+            }
+
+            /* Se ritorniamo una stringa che "vive" nel call_env, salviamola
+             * nell'arena prima di distruggere lo scope. */
+            if (result.type == VAL_STRING) {
+                size_t len = strlen(result.as.string) + 1;
+                char *copy = malloc(len);
+                if (copy == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                memcpy(copy, result.as.string, len);
+                intern(it, copy);
+                result = value_string(copy);
+            }
+
+            env_free(&call_env);
+            return result;
+        }
     }
     return value_number(0);
 }
@@ -203,11 +274,22 @@ static void execute(Stmt *stmt, Interp *it) {
         }
 
         case STMT_BLOCK: {
+            /* Un blocco crea un NUOVO scope che racchiude quello esterno:
+             * le variabili dichiarate qui dentro spariscono all'uscita. */
+            Env block_env;
+            env_init(&block_env);
+            block_env.enclosing = it->env;
+            Env *saved = it->env;
+            it->env = &block_env;
+
             Program *body = &stmt->as.block.body;
             for (int i = 0; i < body->count; i++) {
                 execute(body->statements[i], it);
-                if (it->had_error) break;
+                if (it->had_error || it->is_returning) break;
             }
+
+            it->env = saved;
+            env_free(&block_env);
             break;
         }
 
@@ -228,8 +310,25 @@ static void execute(Stmt *stmt, Interp *it) {
                 if (it->had_error) break;
                 if (!is_truthy(cond)) break;
                 execute(stmt->as.while_stmt.body, it);
-                if (it->had_error) break;
+                if (it->had_error || it->is_returning) break;
             }
+            break;
+        }
+
+        case STMT_FUN: {
+            /* Definisce una variabile col nome della funzione, il cui valore
+             * e' la funzione stessa (un puntatore al suo nodo AST). */
+            env_define(it->env, stmt->as.function.name, value_function(stmt));
+            break;
+        }
+
+        case STMT_RETURN: {
+            Value v;
+            if (stmt->as.ret.value != NULL) v = evaluate(stmt->as.ret.value, it);
+            else                            v = value_number(0);   /* return "vuoto" */
+            if (it->had_error) break;
+            it->return_value = v;
+            it->is_returning = 1;   /* segnala: stiamo uscendo dalla funzione */
             break;
         }
     }
@@ -242,14 +341,17 @@ static void execute(Stmt *stmt, Interp *it) {
 void run_program(Program *program, Env *env, int *had_error) {
     Interp it;
     it.env = env;
+    it.globals = env;
     it.had_error = 0;
+    it.is_returning = 0;
+    it.return_value = value_number(0);
     it.strings = NULL;
     it.str_count = 0;
     it.str_cap = 0;
 
     for (int i = 0; i < program->count; i++) {
         execute(program->statements[i], &it);
-        if (it.had_error) break;
+        if (it.had_error || it.is_returning) break;
     }
 
     /* Libera le stringhe create a runtime (le concatenazioni). */
