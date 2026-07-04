@@ -137,7 +137,7 @@ static Expr *factor(Parser *p) {
 }
 
 static Expr *unary(Parser *p) {
-    if (check(p, TOKEN_MINUS)) {
+    if (check(p, TOKEN_MINUS) || check(p, TOKEN_BANG)) {
         TokenType op = p->current.type;
         advance(p);
         Expr *right = unary(p);
@@ -180,11 +180,17 @@ static Stmt *statement(Parser *p);
 static Stmt *var_declaration(Parser *p);
 static Stmt *print_statement(Parser *p);
 static Stmt *expression_statement(Parser *p);
+static Stmt *block_statement(Parser *p);
+static Stmt *if_statement(Parser *p);
+static Stmt *while_statement(Parser *p);
 
-/* statement -> varDecl | printStmt | exprStmt */
+/* statement -> varDecl | printStmt | ifStmt | whileStmt | block | exprStmt */
 static Stmt *statement(Parser *p) {
-    if (match(p, TOKEN_VAR))   return var_declaration(p);
-    if (match(p, TOKEN_PRINT)) return print_statement(p);
+    if (match(p, TOKEN_VAR))    return var_declaration(p);
+    if (match(p, TOKEN_PRINT))  return print_statement(p);
+    if (match(p, TOKEN_IF))     return if_statement(p);
+    if (match(p, TOKEN_WHILE))  return while_statement(p);
+    if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
 }
 
@@ -210,6 +216,44 @@ static Stmt *expression_statement(Parser *p) {
     Expr *expr = expression(p);
     consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo l'espressione.");
     return stmt_expr(expr);
+}
+
+/* block -> "{" statement* "}"   ('{' gia' consumato)
+ * Raccoglie le istruzioni finche' non trova '}' (o la fine). */
+static Stmt *block_statement(Parser *p) {
+    Program body;
+    program_init(&body);
+    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF)) {
+        program_add(&body, statement(p));
+        if (p->had_error) break;
+    }
+    consume(p, TOKEN_RBRACE, "Mi aspettavo '}' per chiudere il blocco.");
+    return stmt_block(body);
+}
+
+/* ifStmt -> "if" "(" expression ")" statement ( "else" statement )?
+ * ('if' gia' consumato). Il ramo puo' essere un blocco { } o una sola istruzione. */
+static Stmt *if_statement(Parser *p) {
+    consume(p, TOKEN_LPAREN, "Mi aspettavo '(' dopo 'if'.");
+    Expr *condition = expression(p);
+    consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo la condizione dell'if.");
+
+    Stmt *then_branch = statement(p);
+    Stmt *else_branch = NULL;
+    if (match(p, TOKEN_ELSE)) {
+        else_branch = statement(p);
+    }
+    return stmt_if(condition, then_branch, else_branch);
+}
+
+/* whileStmt -> "while" "(" expression ")" statement   ('while' gia' consumato) */
+static Stmt *while_statement(Parser *p) {
+    consume(p, TOKEN_LPAREN, "Mi aspettavo '(' dopo 'while'.");
+    Expr *condition = expression(p);
+    consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo la condizione del while.");
+
+    Stmt *body = statement(p);
+    return stmt_while(condition, body);
 }
 
 /* ------------------------------------------------------------------ */

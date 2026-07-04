@@ -53,6 +53,23 @@ check "ridefinizione"        "var n = 5; var n = 99; print n;"                "9
 check "piu' print"           "var n = 4; print n; print n + 1;"               "4
 5"
 
+echo "== Fase 5: controllo di flusso =="
+check "if vero"              "if (1) print 10;"                           "10"
+check "if falso senza else"  "if (0) print 10;"                           ""
+check "if-else ramo vero"    "var x=5; if (x > 3) print 1; else print 2;" "1"
+check "if-else ramo falso"   "var x=1; if (x > 3) print 1; else print 2;" "2"
+check "not vero"             "print !0;"                                  "1"
+check "not falso"            "print !5;"                                  "0"
+check "blocco"               "{ var a = 7; print a; }"                    "7"
+check "while conta"          "var i=1; while (i<=3) { print i; i=i+1; }"  "1
+2
+3"
+check "fattoriale (while)"   "var n=5; var f=1; var k=1; while (k<=n) { f=f*k; k=k+1; } print f;" "120"
+check "cicli annidati"       "var i=1; while (i<=2) { var j=1; while (j<=2) { print i*j; j=j+1; } i=i+1; }" "1
+2
+2
+4"
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

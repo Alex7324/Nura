@@ -1,0 +1,14 @@
+// Fattoriale con un ciclo while.
+// (La versione ricorsiva con le funzioni arrivera' nella Fase 6.)
+// Eseguilo con:  ./nura examples/fattoriale.nura
+
+var n = 5;
+var risultato = 1;
+var k = 1;
+
+while (k <= n) {
+    risultato = risultato * k;
+    k = k + 1;
+}
+
+print risultato;   // 120

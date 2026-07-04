@@ -102,6 +102,7 @@ static const char *op_str(TokenType op) {
         case TOKEN_STAR:  return "*";
         case TOKEN_SLASH: return "/";
         case TOKEN_PERCENT: return "%";
+        case TOKEN_BANG:  return "!";
         case TOKEN_EQ:    return "==";
         case TOKEN_NEQ:   return "!=";
         case TOKEN_LT:    return "<";
@@ -218,6 +219,27 @@ Stmt *stmt_expr(Expr *expr) {
     return s;
 }
 
+Stmt *stmt_block(Program body) {
+    Stmt *s = new_stmt(STMT_BLOCK);
+    s->as.block.body = body;   /* il blocco prende possesso della lista */
+    return s;
+}
+
+Stmt *stmt_if(Expr *condition, Stmt *then_branch, Stmt *else_branch) {
+    Stmt *s = new_stmt(STMT_IF);
+    s->as.if_stmt.condition = condition;
+    s->as.if_stmt.then_branch = then_branch;
+    s->as.if_stmt.else_branch = else_branch;   /* puo' essere NULL */
+    return s;
+}
+
+Stmt *stmt_while(Expr *condition, Stmt *body) {
+    Stmt *s = new_stmt(STMT_WHILE);
+    s->as.while_stmt.condition = condition;
+    s->as.while_stmt.body = body;
+    return s;
+}
+
 void stmt_free(Stmt *stmt) {
     if (stmt == NULL) return;
     switch (stmt->type) {
@@ -230,6 +252,18 @@ void stmt_free(Stmt *stmt) {
             break;
         case STMT_EXPR:
             ast_free(stmt->as.expr.expr);
+            break;
+        case STMT_BLOCK:
+            program_free(&stmt->as.block.body);   /* libera tutte le istruzioni del blocco */
+            break;
+        case STMT_IF:
+            ast_free(stmt->as.if_stmt.condition);
+            stmt_free(stmt->as.if_stmt.then_branch);
+            stmt_free(stmt->as.if_stmt.else_branch);   /* stmt_free gestisce NULL */
+            break;
+        case STMT_WHILE:
+            ast_free(stmt->as.while_stmt.condition);
+            stmt_free(stmt->as.while_stmt.body);
             break;
     }
     free(stmt);

@@ -24,6 +24,12 @@ static void runtime_error(Interp *it, const char *message) {
     fprintf(stderr, "Errore a runtime: %s\n", message);
 }
 
+/* Regola di verita': 0 e' falso, qualsiasi altro numero e' vero.
+ * Serve a if e while per decidere, e all'operatore ! per negare. */
+static int is_truthy(double value) {
+    return value != 0;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Valutazione di un'espressione                                     */
 /* ------------------------------------------------------------------ */
@@ -63,6 +69,9 @@ static double evaluate(Expr *expr, Interp *it) {
             double right = evaluate(expr->as.unary.right, it);
             switch (expr->as.unary.op) {
                 case TOKEN_MINUS: return -right;
+                case TOKEN_BANG:
+                    if (is_truthy(right)) return 0.0;   /* !vero  = falso */
+                    else                  return 1.0;   /* !falso = vero  */
                 default:          return 0;
             }
         }
@@ -129,6 +138,39 @@ static void execute(Stmt *stmt, Interp *it) {
 
         case STMT_EXPR: {
             evaluate(stmt->as.expr.expr, it);
+            break;
+        }
+
+        case STMT_BLOCK: {
+            /* esegue in ordine le istruzioni del blocco */
+            Program *body = &stmt->as.block.body;
+            for (int i = 0; i < body->count; i++) {
+                execute(body->statements[i], it);
+                if (it->had_error) break;
+            }
+            break;
+        }
+
+        case STMT_IF: {
+            double cond = evaluate(stmt->as.if_stmt.condition, it);
+            if (it->had_error) break;
+            if (is_truthy(cond)) {
+                execute(stmt->as.if_stmt.then_branch, it);
+            } else if (stmt->as.if_stmt.else_branch != NULL) {
+                execute(stmt->as.if_stmt.else_branch, it);
+            }
+            break;
+        }
+
+        case STMT_WHILE: {
+            /* ripete finche' la condizione resta vera */
+            for (;;) {
+                double cond = evaluate(stmt->as.while_stmt.condition, it);
+                if (it->had_error) break;
+                if (!is_truthy(cond)) break;      /* condizione falsa: esci */
+                execute(stmt->as.while_stmt.body, it);
+                if (it->had_error) break;
+            }
             break;
         }
     }

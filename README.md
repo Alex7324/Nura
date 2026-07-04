@@ -44,11 +44,25 @@ make                                    # oppure: mingw32-make (Windows/MinGW)
 make test                               # esegue la suite di test automatici
 ```
 
-Gestisce: espressioni con `+ - * /`, confronti (`< <= > >= == !=`), meno unario e
-parentesi; **variabili** (`var`), **assegnamento** e l'istruzione **`print`**. Le
+Gestisce: espressioni con `+ - * / %`, confronti (`< <= > >= == !=`), meno unario e
+il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
+**`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }`. Le
 variabili vivono in un ambiente realizzato come **tabella hash**. Segnala sia gli
 errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
 variabile non definita).
+
+Esempio (fattoriale iterativo, in `examples/fattoriale.nura`):
+
+```
+var n = 5;
+var risultato = 1;
+var k = 1;
+while (k <= n) {
+    risultato = risultato * k;
+    k = k + 1;
+}
+print risultato;   // 120
+```
 
 ## Dove voglio arrivare
 
@@ -73,7 +87,7 @@ Cioè: variabili, condizioni, cicli, e funzioni che possono richiamare sé stess
 - [x] **Fase 2 — Parser + AST**: token → albero, con le precedenze
 - [x] **Fase 3 — Evaluator**: percorrere l'albero e calcolare
 - [x] **Fase 4 — Variabili e ambiente**: `var`, assegnamento, `print`, tabella hash nome → valore
-- [ ] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`
+- [x] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`, operatore `!`
 - [ ] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione
 
 ## Come l'ho sviluppato
