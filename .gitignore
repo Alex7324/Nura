@@ -1,0 +1,20 @@
+# Eseguibili e output di compilazione (si rigenerano con gcc)
+*.exe
+*.out
+*.o
+*.obj
+piccolo
+piccolo_dbg
+
+# File di debug
+*.pdb
+*.ilk
+
+# Cartelle/file di editor e IDE
+.vscode/
+.idea/
+*.swp
+
+# File di sistema
+Thumbs.db
+.DS_Store
