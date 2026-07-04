@@ -34,6 +34,8 @@ static void consume(Parser *p, TokenType type, const char *msg) {
 }
 
 static Expr *expression(Parser *p);
+static Expr *logic_or(Parser *p);
+static Expr *logic_and(Parser *p);
 static Expr *equality(Parser *p);
 static Expr *comparison(Parser *p);
 static Expr *term(Parser *p);
@@ -46,11 +48,40 @@ static const char *op_str(TokenType op) {
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
         case TOKEN_PERCENT: return "%";
+        case TOKEN_AND: return "&&"; case TOKEN_OR: return "||";
         default: return "?";
     }
 }
 
-static Expr *expression(Parser *p) { enter("expression"); Expr *e = equality(p); leave(); return e; }
+static Expr *expression(Parser *p) { enter("expression"); Expr *e = logic_or(p); leave(); return e; }
+
+static Expr *logic_or(Parser *p) {
+    enter("logic_or");
+    Expr *left = logic_and(p);
+    while (check(p, TOKEN_OR)) {
+        TokenType op = p->current.type;
+        ind(); printf("   ** logic_or: vedo '||' -> raccolgo il destro\n");
+        advance(p);
+        Expr *right = logic_and(p);
+        left = ast_logical(op, left, right);
+        ind(); printf("   ** logic_or: creo nodo (||)\n");
+    }
+    leave(); return left;
+}
+
+static Expr *logic_and(Parser *p) {
+    enter("logic_and");
+    Expr *left = equality(p);
+    while (check(p, TOKEN_AND)) {
+        TokenType op = p->current.type;
+        ind(); printf("   ** logic_and: vedo '&&' -> raccolgo il destro\n");
+        advance(p);
+        Expr *right = equality(p);
+        left = ast_logical(op, left, right);
+        ind(); printf("   ** logic_and: creo nodo (&&)\n");
+    }
+    leave(); return left;
+}
 
 static Expr *equality(Parser *p) {
     enter("equality");

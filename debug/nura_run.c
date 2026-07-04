@@ -45,6 +45,7 @@ static const char *op_str(TokenType op) {
         case TOKEN_EQ: return "==";   case TOKEN_NEQ: return "!=";
         case TOKEN_LT: return "<";    case TOKEN_LE: return "<=";
         case TOKEN_GT: return ">";    case TOKEN_GE: return ">=";
+        case TOKEN_AND: return "&&";  case TOKEN_OR: return "||";
         default: return "?";
     }
 }
@@ -103,6 +104,22 @@ static double n_eval(Expr *e, Env *env) {
             else if (op==TOKEN_LT) res=(l<r); else if (op==TOKEN_LE) res=(l<=r);
             else if (op==TOKEN_GT) res=(l>r); else if (op==TOKEN_GE) res=(l>=r);
             ind(); printf("%g %s %g = %g\n", l, op_str(op), r, res);
+            return res;
+        }
+        case EXPR_LOGICAL: {
+            const char *s = op_str(e->as.logical.op);
+            double l = n_eval(e->as.logical.left, env);
+            if (e->as.logical.op == TOKEN_OR && l != 0) {
+                ind(); printf("%s: sinistro vero -> corto circuito (destro non valutato) -> 1\n", s);
+                return 1;
+            }
+            if (e->as.logical.op == TOKEN_AND && l == 0) {
+                ind(); printf("%s: sinistro falso -> corto circuito (destro non valutato) -> 0\n", s);
+                return 0;
+            }
+            double r = n_eval(e->as.logical.right, env);
+            double res; if (r != 0) res = 1; else res = 0;
+            ind(); printf("%g %s %g -> %g\n", l, s, r, res);
             return res;
         }
     }

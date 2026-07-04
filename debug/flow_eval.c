@@ -17,6 +17,7 @@ static const char *op_str(TokenType op) {
         case TOKEN_EQ: return "=="; case TOKEN_NEQ: return "!=";
         case TOKEN_LT: return "<"; case TOKEN_LE: return "<=";
         case TOKEN_GT: return ">"; case TOKEN_GE: return ">=";
+        case TOKEN_AND: return "&&"; case TOKEN_OR: return "||";
         default: return "?";
     }
 }
@@ -55,6 +56,24 @@ static double ev(Expr *e) {
             ind(); printf("nodo (%s): %g %s %g = %g\n", s, l, s, r, res);
             return res;
         }
+        case EXPR_LOGICAL: {
+            const char *s = op_str(e->as.logical.op);
+            ind(); printf("nodo (%s): valuto il SINISTRO (corto circuito)\n", s); d++;
+            double l = ev(e->as.logical.left); d--;
+            if (e->as.logical.op == TOKEN_OR && l != 0) {
+                ind(); printf("nodo (%s): sinistro vero -> NON valuto il destro -> 1\n", s);
+                return 1;
+            }
+            if (e->as.logical.op == TOKEN_AND && l == 0) {
+                ind(); printf("nodo (%s): sinistro falso -> NON valuto il destro -> 0\n", s);
+                return 0;
+            }
+            ind(); printf("nodo (%s): valuto anche il DESTRO\n", s); d++;
+            double r = ev(e->as.logical.right); d--;
+            double res; if (r != 0) res = 1; else res = 0;
+            ind(); printf("nodo (%s): risultato = %g\n", s, res);
+            return res;
+        }
     }
     return 0;
 }
@@ -68,7 +87,7 @@ double eval_expression(Expr *expr, int *had_error) {
 void flow_free(Expr *e) {
     if (e == NULL) return;
     if (e->type == EXPR_UNARY) flow_free(e->as.unary.right);
-    else if (e->type == EXPR_BINARY) { flow_free(e->as.binary.left); flow_free(e->as.binary.right); }
+    else if (e->type == EXPR_BINARY || e->type == EXPR_LOGICAL) { flow_free(e->as.binary.left); flow_free(e->as.binary.right); }
     if (e->type == EXPR_NUMBER) { ind(); printf("libero foglia %g\n", e->as.number.value); }
     else {
         TokenType op;
