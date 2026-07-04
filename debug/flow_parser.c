@@ -45,6 +45,7 @@ static const char *op_str(TokenType op) {
     switch (op) {
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
+        case TOKEN_PERCENT: return "%";
         default: return "?";
     }
 }
@@ -90,7 +91,7 @@ static Expr *term(Parser *p) {
 static Expr *factor(Parser *p) {
     enter("factor");
     Expr *left = unary(p);
-    while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH)) {
+    while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH) || check(p, TOKEN_PERCENT)) {
         TokenType op = p->current.type;
         ind(); printf("   ** factor: vedo '%s', e' roba mia -> raccolgo il destro\n", op_str(op));
         advance(p);

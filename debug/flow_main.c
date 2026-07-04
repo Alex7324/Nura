@@ -12,7 +12,9 @@ static void banner(const char *s) {
 }
 
 int main(int argc, char **argv) {
-    const char *source = (argc > 1) ? argv[1] : "1 + 2 * 3";
+    const char *source;
+    if (argc > 1) source = argv[1];
+    else          source = "1 + 2 * 3";
     printf("SORGENTE: \"%s\"\n", source);
 
     banner("FASE 1+2: il parser costruisce l'albero, tirando i token dal lexer uno alla volta");

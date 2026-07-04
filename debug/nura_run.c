@@ -17,6 +17,7 @@
 #include "ast.h"
 #include "env.h"
 #include <stdio.h>
+#include <math.h>   /* fmod, per l'operatore % */
 
 /* --- disegna lo stato della tabella hash --- */
 static void dump_env(Env *env) {
@@ -25,7 +26,10 @@ static void dump_env(Env *env) {
     int first = 1;
     for (int i = 0; i < ENV_CAPACITY; i++) {
         for (Entry *e = env->buckets[i]; e != NULL; e = e->next) {
-            printf("%sbucket[%d]: %s=%g", first ? "" : " , ", i, e->name, e->value);
+            const char *sep;
+            if (first) sep = "";
+            else       sep = " , ";
+            printf("%sbucket[%d]: %s=%g", sep, i, e->name, e->value);
             first = 0;
         }
     }
@@ -36,6 +40,7 @@ static const char *op_str(TokenType op) {
     switch (op) {
         case TOKEN_PLUS: return "+";  case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*";  case TOKEN_SLASH: return "/";
+        case TOKEN_PERCENT: return "%";
         case TOKEN_EQ: return "==";   case TOKEN_NEQ: return "!=";
         case TOKEN_LT: return "<";    case TOKEN_LE: return "<=";
         case TOKEN_GT: return ">";    case TOKEN_GE: return ">=";
@@ -64,9 +69,12 @@ static double n_eval(Expr *e, Env *env) {
         case EXPR_ASSIGN: {
             double v = n_eval(e->as.assign.value, env);
             int ok = env_assign(env, e->as.assign.name, v);
+            const char *esito;
+            if (ok) esito = "aggiornata";
+            else    esito = "NON definita!";
             ind();
             printf("assegno '%s' = %g  ->  env_assign (%s)\n",
-                   e->as.assign.name, v, ok ? "aggiornata" : "NON definita!");
+                   e->as.assign.name, v, esito);
             return v;
         }
 
@@ -84,6 +92,7 @@ static double n_eval(Expr *e, Env *env) {
             double res = 0; TokenType op = e->as.binary.op;
             if (op==TOKEN_PLUS) res=l+r; else if (op==TOKEN_MINUS) res=l-r;
             else if (op==TOKEN_STAR) res=l*r; else if (op==TOKEN_SLASH) res=l/r;
+            else if (op==TOKEN_PERCENT) res=fmod(l,r);
             else if (op==TOKEN_EQ) res=(l==r); else if (op==TOKEN_NEQ) res=(l!=r);
             else if (op==TOKEN_LT) res=(l<r); else if (op==TOKEN_LE) res=(l<=r);
             else if (op==TOKEN_GT) res=(l>r); else if (op==TOKEN_GE) res=(l>=r);
@@ -123,7 +132,9 @@ static void n_execute(Stmt *s, Env *env, int n) {
 }
 
 int main(int argc, char **argv) {
-    const char *source = (argc > 1) ? argv[1] : "var n = 5; print n * 2;";
+    const char *source;
+    if (argc > 1) source = argv[1];
+    else          source = "var n = 5; print n * 2;";
     printf("PROGRAMMA: \"%s\"\n", source);
 
     /* FASE 1+2: il parser vero produce la lista di istruzioni. */

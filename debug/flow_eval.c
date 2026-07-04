@@ -3,6 +3,7 @@
 #include "eval.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>   /* fmod, per l'operatore % */
 
 static int d = 0;
 static void ind(void) { for (int i = 0; i < d; i++) printf("|  "); }
@@ -11,6 +12,7 @@ static const char *op_str(TokenType op) {
     switch (op) {
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
+        case TOKEN_PERCENT: return "%";
         case TOKEN_EQ: return "=="; case TOKEN_NEQ: return "!=";
         case TOKEN_LT: return "<"; case TOKEN_LE: return "<=";
         case TOKEN_GT: return ">"; case TOKEN_GE: return ">=";
@@ -38,6 +40,7 @@ static double ev(Expr *e) {
             double res = 0; TokenType op = e->as.binary.op;
             if (op==TOKEN_PLUS) res=l+r; else if (op==TOKEN_MINUS) res=l-r;
             else if (op==TOKEN_STAR) res=l*r; else if (op==TOKEN_SLASH) res=l/r;
+            else if (op==TOKEN_PERCENT) res=fmod(l,r);
             else if (op==TOKEN_EQ) res=(l==r); else if (op==TOKEN_NEQ) res=(l!=r);
             else if (op==TOKEN_LT) res=(l<r); else if (op==TOKEN_LE) res=(l<=r);
             else if (op==TOKEN_GT) res=(l>r); else if (op==TOKEN_GE) res=(l>=r);
@@ -59,6 +62,11 @@ void flow_free(Expr *e) {
     if (e->type == EXPR_UNARY) flow_free(e->as.unary.right);
     else if (e->type == EXPR_BINARY) { flow_free(e->as.binary.left); flow_free(e->as.binary.right); }
     if (e->type == EXPR_NUMBER) { ind(); printf("libero foglia %g\n", e->as.number.value); }
-    else { ind(); printf("libero nodo (%s)\n", op_str(e->type==EXPR_UNARY?e->as.unary.op:e->as.binary.op)); }
+    else {
+        TokenType op;
+        if (e->type == EXPR_UNARY) op = e->as.unary.op;
+        else                       op = e->as.binary.op;
+        ind(); printf("libero nodo (%s)\n", op_str(op));
+    }
     free(e);
 }
