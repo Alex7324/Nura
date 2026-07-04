@@ -80,6 +80,11 @@ static double n_eval(Expr *e, Env *env) {
 
         case EXPR_UNARY: {
             depth++; double r = n_eval(e->as.unary.right, env); depth--;
+            if (e->as.unary.op == TOKEN_BANG) {
+                double res; if (r != 0) res = 0; else res = 1;
+                ind(); printf("!(%g) = %g\n", r, res);
+                return res;
+            }
             ind(); printf("-(%g) = %g\n", r, -r);
             return -r;
         }
@@ -126,6 +131,41 @@ static void n_execute(Stmt *s, Env *env, int n) {
             printf("\n> istruzione %d:  espressione ;  (valutata per l'effetto)\n", n);
             n_eval(s->as.expr.expr, env);
             dump_env(env);
+            break;
+        }
+
+        case STMT_BLOCK: {
+            printf("\n> istruzione %d:  blocco { ... }\n", n);
+            Program *body = &s->as.block.body;
+            for (int i = 0; i < body->count; i++) n_execute(body->statements[i], env, i + 1);
+            break;
+        }
+
+        case STMT_IF: {
+            printf("\n> istruzione %d:  if (...)\n", n);
+            double cond = n_eval(s->as.if_stmt.condition, env);
+            if (cond != 0) {
+                printf("      condizione VERA (%g)  ->  eseguo il ramo 'then'\n", cond);
+                n_execute(s->as.if_stmt.then_branch, env, n);
+            } else if (s->as.if_stmt.else_branch != NULL) {
+                printf("      condizione FALSA (0)  ->  eseguo il ramo 'else'\n");
+                n_execute(s->as.if_stmt.else_branch, env, n);
+            } else {
+                printf("      condizione FALSA (0)  ->  niente da fare\n");
+            }
+            break;
+        }
+
+        case STMT_WHILE: {
+            printf("\n> istruzione %d:  while (...)\n", n);
+            int giro = 0;
+            for (;;) {
+                double cond = n_eval(s->as.while_stmt.condition, env);
+                if (cond == 0) { printf("      condizione FALSA  ->  esco dal ciclo\n"); break; }
+                giro++;
+                printf("      --- giro %d (condizione vera: %g) ---\n", giro, cond);
+                n_execute(s->as.while_stmt.body, env, n);
+            }
             break;
         }
     }

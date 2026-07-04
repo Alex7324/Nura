@@ -33,9 +33,10 @@ Nura esegue programmi fatti di istruzioni, con variabili e stampa:
 ```sh
 # compilare
 make                                    # oppure: mingw32-make (Windows/MinGW)
-                                        # oppure: gcc -std=c11 -Wall -Wextra -o nura src/*.c
+                                        # oppure: gcc -std=c11 -Wall -Wextra -o nura src/*.c -lm
 
 # eseguire
+./nura                                  # modalita' interattiva (REPL)
 ./nura examples/demo.nura               # esegue un programma da file
 ./nura -e "var n = 5; print n * 2;"     # esegue codice inline  ->  10
 ./nura --tokens "var n = 5;"            # mostra i token (debug)

@@ -22,9 +22,9 @@ static void dump_tokens(const char *source) {
     }
 }
 
-/* Esegue un programma sorgente: parsing -> esecuzione.
+/* Esegue un programma sorgente su un ambiente dato.
  * Ritorna 0 se tutto ok, 1 se c'e' stato un errore (sintassi o runtime). */
-static int run(const char *source) {
+static int run_with_env(const char *source, Env *env) {
     Program program;
     int had_error = 0;
 
@@ -34,17 +34,21 @@ static int run(const char *source) {
         return 1;
     }
 
-    Env env;
-    env_init(&env);
-
     int rt_error = 0;
-    run_program(&program, &env, &rt_error);
+    run_program(&program, env, &rt_error);
 
-    env_free(&env);
     program_free(&program);
-
     if (rt_error) return 1;
     return 0;
+}
+
+/* Esegue un programma con un ambiente "usa e getta". */
+static int run(const char *source) {
+    Env env;
+    env_init(&env);
+    int status = run_with_env(source, &env);
+    env_free(&env);
+    return status;
 }
 
 /* Legge tutto il contenuto di un file in una stringa (che il chiamante
@@ -67,8 +71,46 @@ static char *read_file(const char *path) {
     return buffer;
 }
 
+/* Modalita' interattiva (REPL): legge una riga, la esegue, ripete.
+ * Le variabili restano vive tra una riga e l'altra (stesso ambiente).
+ *
+ * E' anche la risposta al "doppio-clic che chiude subito la finestra":
+ * senza argomenti l'interprete entra qui e RESTA in attesa di input,
+ * quindi la finestra non si chiude. Usa solo funzioni C standard
+ * (fgets/stdin), quindi funziona uguale su Windows, Linux e Mac.
+ *
+ * Si esce scrivendo 'exit', oppure con la fine dell'input:
+ * Ctrl+D su Linux/Mac, Ctrl+Z e Invio su Windows. */
+static void repl(void) {
+    printf("Nura - modalita' interattiva.\n");
+    printf("Scrivi istruzioni terminate da ';' e premi Invio.  Es:  print 1 + 2;\n");
+    printf("Per uscire: 'exit'  (oppure Ctrl+D / Ctrl+Z + Invio).\n\n");
+
+    Env env;
+    env_init(&env);   /* un solo ambiente: le variabili persistono tra le righe */
+
+    char line[1024];
+    for (;;) {
+        printf("nura> ");
+        fflush(stdout);
+
+        if (fgets(line, sizeof(line), stdin) == NULL) break;   /* fine input */
+
+        if (strcmp(line, "exit\n") == 0 || strcmp(line, "exit\r\n") == 0 ||
+            strcmp(line, "exit") == 0) {
+            break;
+        }
+
+        run_with_env(line, &env);   /* eventuali errori vengono stampati da soli */
+    }
+
+    env_free(&env);
+    printf("\nA presto!\n");
+}
+
 int main(int argc, char **argv) {
     /* Uso:
+     *   nura                  modalita' interattiva (REPL)
      *   nura file.nura        esegue un programma da file
      *   nura -e "codice"      esegue codice inline
      *   nura --tokens "..."   mostra i token (debug)
@@ -96,10 +138,7 @@ int main(int argc, char **argv) {
         return run(argv[1]);            /* non e' un file: trattalo come codice inline */
     }
 
-    fprintf(stderr,
-        "Uso:\n"
-        "  nura file.nura        esegue un programma da file\n"
-        "  nura -e \"codice\"      esegue codice inline\n"
-        "  nura --tokens \"...\"   mostra i token (debug)\n");
-    return 1;
+    /* Nessun argomento: modalita' interattiva. */
+    repl();
+    return 0;
 }

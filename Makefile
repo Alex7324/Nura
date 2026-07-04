@@ -8,12 +8,13 @@
 
 CC      = gcc
 CFLAGS  = -std=c11 -Wall -Wextra
+LDLIBS  = -lm            # libreria matematica (fmod) — richiesta su Linux/Mac
 SRC     = $(wildcard src/*.c)
 BIN     = nura
 
 # Compila l'interprete (bersaglio di default)
 $(BIN): $(SRC)
-	$(CC) $(CFLAGS) -o $(BIN) $(SRC)
+	$(CC) $(CFLAGS) -o $(BIN) $(SRC) $(LDLIBS)
 
 # Compila (se serve) ed esegue la suite di test
 test: $(BIN)
