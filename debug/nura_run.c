@@ -1,24 +1,26 @@
-/* nura_run — narratore dell'ESECUZIONE di un programma (Fase 4).
+/* nura_run — narratore dell'ESECUZIONE di un programma.
  *
- * A differenza di nura_flow (che mostra come UNA espressione diventa un
- * albero), qui vediamo un PROGRAMMA intero: la lista di istruzioni prodotta
- * dal parser, e poi l'esecuzione passo per passo, con le operazioni
- * sull'AMBIENTE (la tabella hash): env_define, env_get, env_assign.
+ * Mostra un PROGRAMMA intero: la lista di istruzioni prodotta dal parser, e
+ * poi l'esecuzione passo per passo, con le operazioni sull'AMBIENTE (la
+ * tabella hash): env_define, env_get, env_assign. I valori possono essere
+ * numeri, booleani o stringhe (Value).
  *
- * Usa il parser e l'ambiente VERI (src/parser.c, src/env.c): l'unica cosa
- * "parlante" e' l'esecuzione, scritta qui sotto apposta per narrarla.
+ * Usa il parser e l'ambiente VERI (src/parser.c, src/env.c, src/value.c):
+ * l'unica cosa "parlante" e' l'esecuzione, scritta qui apposta per narrarla.
  *
  * Compilazione (dalla cartella principale):
- *   gcc -std=c11 -I src debug/nura_run.c \
- *       src/parser.c src/ast.c src/lexer.c src/token.c src/env.c -o nura_run
- *   ./nura_run "var n = 5; print n * 2;"
+ *   gcc -std=gnu11 -I src debug/nura_run.c \
+ *       src/parser.c src/ast.c src/lexer.c src/token.c src/env.c src/value.c \
+ *       -o nura_run -lm
  */
 #include "parser.h"
 #include "ast.h"
 #include "env.h"
 #include "pause.h"
 #include <stdio.h>
-#include <math.h>   /* fmod, per l'operatore % */
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
 /* --- disegna lo stato della tabella hash --- */
 static void dump_env(Env *env) {
@@ -30,7 +32,8 @@ static void dump_env(Env *env) {
             const char *sep;
             if (first) sep = "";
             else       sep = " , ";
-            printf("%sbucket[%d]: %s=%g", sep, i, e->name, e->value);
+            printf("%sbucket[%d]: %s=", sep, i, e->name);
+            value_print(e->value);
             first = 0;
         }
     }
@@ -54,76 +57,105 @@ static const char *op_str(TokenType op) {
 static int depth;
 static void ind(void) { printf("      "); for (int i = 0; i < depth; i++) printf("  "); }
 
-static double n_eval(Expr *e, Env *env) {
+static Value n_eval(Expr *e, Env *env) {
     switch (e->type) {
-        case EXPR_NUMBER:
-            return e->as.number.value;   /* foglia numerica: silenziosa */
+        case EXPR_NUMBER: return value_number(e->as.number.value);
+        case EXPR_BOOL:   return value_bool(e->as.boolean.value);
+        case EXPR_STRING: return value_string(e->as.string.value);
 
         case EXPR_VARIABLE: {
-            double v = 0;
+            Value v;
             int ok = env_get(env, e->as.variable.name, &v);
             ind();
-            if (ok) printf("leggo variabile '%s'  ->  env_get = %g\n", e->as.variable.name, v);
-            else    printf("leggo variabile '%s'  ->  NON definita!\n", e->as.variable.name);
+            if (ok) {
+                printf("leggo variabile '%s'  ->  env_get = ", e->as.variable.name);
+                value_print(v); printf("\n");
+            } else {
+                printf("leggo variabile '%s'  ->  NON definita!\n", e->as.variable.name);
+                v = value_number(0);
+            }
             return v;
         }
 
         case EXPR_ASSIGN: {
-            double v = n_eval(e->as.assign.value, env);
+            Value v = n_eval(e->as.assign.value, env);
             int ok = env_assign(env, e->as.assign.name, v);
             const char *esito;
             if (ok) esito = "aggiornata";
             else    esito = "NON definita!";
             ind();
-            printf("assegno '%s' = %g  ->  env_assign (%s)\n",
-                   e->as.assign.name, v, esito);
+            printf("assegno '%s' = ", e->as.assign.name);
+            value_print(v);
+            printf("  ->  env_assign (%s)\n", esito);
             return v;
         }
 
         case EXPR_UNARY: {
-            depth++; double r = n_eval(e->as.unary.right, env); depth--;
+            depth++; Value r = n_eval(e->as.unary.right, env); depth--;
             if (e->as.unary.op == TOKEN_BANG) {
-                double res; if (r != 0) res = 0; else res = 1;
-                ind(); printf("!(%g) = %g\n", r, res);
+                Value res = value_bool(!value_is_truthy(r));
+                ind(); printf("!"); value_print(r); printf(" = "); value_print(res); printf("\n");
                 return res;
             }
-            ind(); printf("-(%g) = %g\n", r, -r);
-            return -r;
+            Value res = value_number(-r.as.number);
+            ind(); printf("-("); value_print(r); printf(") = "); value_print(res); printf("\n");
+            return res;
         }
 
         case EXPR_BINARY: {
             depth++;
-            double l = n_eval(e->as.binary.left, env);
-            double r = n_eval(e->as.binary.right, env);
+            Value l = n_eval(e->as.binary.left, env);
+            Value r = n_eval(e->as.binary.right, env);
             depth--;
-            double res = 0; TokenType op = e->as.binary.op;
-            if (op==TOKEN_PLUS) res=l+r; else if (op==TOKEN_MINUS) res=l-r;
-            else if (op==TOKEN_STAR) res=l*r; else if (op==TOKEN_SLASH) res=l/r;
-            else if (op==TOKEN_PERCENT) res=fmod(l,r);
-            else if (op==TOKEN_EQ) res=(l==r); else if (op==TOKEN_NEQ) res=(l!=r);
-            else if (op==TOKEN_LT) res=(l<r); else if (op==TOKEN_LE) res=(l<=r);
-            else if (op==TOKEN_GT) res=(l>r); else if (op==TOKEN_GE) res=(l>=r);
-            ind(); printf("%g %s %g = %g\n", l, op_str(op), r, res);
+            TokenType op = e->as.binary.op;
+            Value res;
+            if (op == TOKEN_EQ)       res = value_bool(values_equal(l, r));
+            else if (op == TOKEN_NEQ) res = value_bool(!values_equal(l, r));
+            else if (op == TOKEN_PLUS && l.type == VAL_STRING && r.type == VAL_STRING) {
+                size_t la = strlen(l.as.string), lb = strlen(r.as.string);
+                char *s = malloc(la + lb + 1);
+                memcpy(s, l.as.string, la);
+                memcpy(s + la, r.as.string, lb + 1);
+                res = value_string(s);   /* piccolo leak: ok per un tool di debug */
+            } else {
+                double a = l.as.number, b = r.as.number;
+                if (op==TOKEN_PLUS) res=value_number(a+b);
+                else if (op==TOKEN_MINUS) res=value_number(a-b);
+                else if (op==TOKEN_STAR) res=value_number(a*b);
+                else if (op==TOKEN_SLASH) res=value_number(a/b);
+                else if (op==TOKEN_PERCENT) res=value_number(fmod(a,b));
+                else if (op==TOKEN_LT) res=value_bool(a<b);
+                else if (op==TOKEN_LE) res=value_bool(a<=b);
+                else if (op==TOKEN_GT) res=value_bool(a>b);
+                else if (op==TOKEN_GE) res=value_bool(a>=b);
+                else res=value_number(0);
+            }
+            ind();
+            value_print(l); printf(" %s ", op_str(op)); value_print(r);
+            printf(" = "); value_print(res); printf("\n");
             return res;
         }
+
         case EXPR_LOGICAL: {
             const char *s = op_str(e->as.logical.op);
-            double l = n_eval(e->as.logical.left, env);
-            if (e->as.logical.op == TOKEN_OR && l != 0) {
-                ind(); printf("%s: sinistro vero -> corto circuito (destro non valutato) -> 1\n", s);
-                return 1;
+            Value l = n_eval(e->as.logical.left, env);
+            if (e->as.logical.op == TOKEN_OR && value_is_truthy(l)) {
+                ind(); printf("%s: sinistro vero -> corto circuito -> true\n", s);
+                return value_bool(1);
             }
-            if (e->as.logical.op == TOKEN_AND && l == 0) {
-                ind(); printf("%s: sinistro falso -> corto circuito (destro non valutato) -> 0\n", s);
-                return 0;
+            if (e->as.logical.op == TOKEN_AND && !value_is_truthy(l)) {
+                ind(); printf("%s: sinistro falso -> corto circuito -> false\n", s);
+                return value_bool(0);
             }
-            double r = n_eval(e->as.logical.right, env);
-            double res; if (r != 0) res = 1; else res = 0;
-            ind(); printf("%g %s %g -> %g\n", l, s, r, res);
+            Value r = n_eval(e->as.logical.right, env);
+            Value res = value_bool(value_is_truthy(r));
+            ind();
+            value_print(l); printf(" %s ", s); value_print(r);
+            printf(" -> "); value_print(res); printf("\n");
             return res;
         }
     }
-    return 0;
+    return value_number(0);
 }
 
 /* --- esecuzione narrante di un'istruzione --- */
@@ -132,17 +164,20 @@ static void n_execute(Stmt *s, Env *env, int n) {
     switch (s->type) {
         case STMT_VAR: {
             printf("\n> istruzione %d:  var %s = ...\n", n, s->as.var.name);
-            double v = n_eval(s->as.var.initializer, env);
+            Value v = n_eval(s->as.var.initializer, env);
             env_define(env, s->as.var.name, v);
-            printf("      env_define(\"%s\", %g)  ->  la variabile entra nella tabella\n",
-                   s->as.var.name, v);
+            printf("      env_define(\"%s\", ", s->as.var.name);
+            value_print(v);
+            printf(")  ->  la variabile entra nella tabella\n");
             dump_env(env);
             break;
         }
         case STMT_PRINT: {
             printf("\n> istruzione %d:  print ...\n", n);
-            double v = n_eval(s->as.print.expr, env);
-            printf("      ===> STAMPA: %g\n", v);
+            Value v = n_eval(s->as.print.expr, env);
+            printf("      ===> STAMPA: ");
+            value_print(v);
+            printf("\n");
             break;
         }
         case STMT_EXPR: {
@@ -151,37 +186,34 @@ static void n_execute(Stmt *s, Env *env, int n) {
             dump_env(env);
             break;
         }
-
         case STMT_BLOCK: {
             printf("\n> istruzione %d:  blocco { ... }\n", n);
             Program *body = &s->as.block.body;
             for (int i = 0; i < body->count; i++) n_execute(body->statements[i], env, i + 1);
             break;
         }
-
         case STMT_IF: {
             printf("\n> istruzione %d:  if (...)\n", n);
-            double cond = n_eval(s->as.if_stmt.condition, env);
-            if (cond != 0) {
-                printf("      condizione VERA (%g)  ->  eseguo il ramo 'then'\n", cond);
+            Value cond = n_eval(s->as.if_stmt.condition, env);
+            if (value_is_truthy(cond)) {
+                printf("      condizione VERA  ->  eseguo il ramo 'then'\n");
                 n_execute(s->as.if_stmt.then_branch, env, n);
             } else if (s->as.if_stmt.else_branch != NULL) {
-                printf("      condizione FALSA (0)  ->  eseguo il ramo 'else'\n");
+                printf("      condizione FALSA  ->  eseguo il ramo 'else'\n");
                 n_execute(s->as.if_stmt.else_branch, env, n);
             } else {
-                printf("      condizione FALSA (0)  ->  niente da fare\n");
+                printf("      condizione FALSA  ->  niente da fare\n");
             }
             break;
         }
-
         case STMT_WHILE: {
             printf("\n> istruzione %d:  while (...)\n", n);
             int giro = 0;
             for (;;) {
-                double cond = n_eval(s->as.while_stmt.condition, env);
-                if (cond == 0) { printf("      condizione FALSA  ->  esco dal ciclo\n"); break; }
+                Value cond = n_eval(s->as.while_stmt.condition, env);
+                if (!value_is_truthy(cond)) { printf("      condizione FALSA  ->  esco dal ciclo\n"); break; }
                 giro++;
-                printf("      --- giro %d (condizione vera: %g) ---\n", giro, cond);
+                printf("      --- giro %d (condizione vera) ---\n", giro);
                 n_execute(s->as.while_stmt.body, env, n);
             }
             break;
@@ -201,21 +233,7 @@ int main(int argc, char **argv) {
     parse_program(source, &program, &err);
     if (err) { program_free(&program); return 1; }
 
-    printf("\n============================================================\n");
-    printf("  Il parser ha prodotto %d istruzioni. Ecco i loro alberi:\n", program.count);
-    printf("============================================================\n");
-    for (int i = 0; i < program.count; i++) {
-        Stmt *s = program.statements[i];
-        printf("\nistruzione %d: ", i + 1);
-        switch (s->type) {
-            case STMT_VAR:   printf("VAR '%s' =\n", s->as.var.name);
-                             ast_print_tree(s->as.var.initializer); break;
-            case STMT_PRINT: printf("PRINT\n"); ast_print_tree(s->as.print.expr); break;
-            case STMT_EXPR:  printf("ESPRESSIONE\n"); ast_print_tree(s->as.expr.expr); break;
-        }
-    }
-
-    /* FASE 4: esecuzione con l'ambiente (tabella hash). */
+    /* FASE 4-6: esecuzione con l'ambiente (tabella hash). */
     printf("\n============================================================\n");
     printf("  Esecuzione: le istruzioni in ordine, sull'ambiente (hash table)\n");
     printf("============================================================\n");
