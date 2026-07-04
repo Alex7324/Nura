@@ -104,7 +104,7 @@ static Expr *factor(Parser *p) {
 
 static Expr *unary(Parser *p) {
     enter("unary");
-    if (check(p, TOKEN_MINUS)) {
+    if (check(p, TOKEN_MINUS) || check(p, TOKEN_BANG)) {
         TokenType op = p->current.type; advance(p);
         Expr *right = unary(p);
         leave(); return ast_unary(op, right);

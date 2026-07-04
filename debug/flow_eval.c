@@ -13,6 +13,7 @@ static const char *op_str(TokenType op) {
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
         case TOKEN_PERCENT: return "%";
+        case TOKEN_BANG: return "!";
         case TOKEN_EQ: return "=="; case TOKEN_NEQ: return "!=";
         case TOKEN_LT: return "<"; case TOKEN_LE: return "<=";
         case TOKEN_GT: return ">"; case TOKEN_GE: return ">=";
@@ -26,10 +27,17 @@ static double ev(Expr *e) {
             ind(); printf("valuto foglia %g -> %g\n", e->as.number.value, e->as.number.value);
             return e->as.number.value;
         case EXPR_UNARY: {
-            ind(); printf("nodo (-): scendo nell'operando\n"); d++;
+            const char *s = op_str(e->as.unary.op);
+            ind(); printf("nodo (%s): scendo nell'operando\n", s); d++;
             double r = ev(e->as.unary.right); d--;
-            ind(); printf("nodo (-): -(%g) = %g\n", r, -r);
-            return -r;
+            double res;
+            if (e->as.unary.op == TOKEN_BANG) {
+                if (r != 0) res = 0; else res = 1;
+            } else {
+                res = -r;
+            }
+            ind(); printf("nodo (%s): %s(%g) = %g\n", s, s, r, res);
+            return res;
         }
         case EXPR_BINARY: {
             const char *s = op_str(e->as.binary.op);
