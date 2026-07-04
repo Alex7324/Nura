@@ -5,6 +5,13 @@
 #include <string.h>  /* memcmp, strlen          */
 
 void lexer_init(Lexer *lexer, const char *source) {
+    /* Salta un eventuale BOM UTF-8 (i byte EF BB BF) all'inizio del file:
+     * molti editor di Windows lo aggiungono, e altrimenti sembrerebbe un
+     * carattere illegale sulla prima riga. */
+    const unsigned char *bytes = (const unsigned char *)source;
+    if (bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
+        source += 3;
+    }
     lexer->start = source;
     lexer->current = source;
     lexer->line = 1;

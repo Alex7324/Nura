@@ -69,6 +69,24 @@ while (k <= n) {
 print risultato;   // 120
 ```
 
+## Installazione (usare `nura` da ovunque)
+
+Di default esegui `./nura file.nura` dalla cartella del progetto. Per usarlo da
+qualsiasi cartella come un comando vero (tipo `gcc`), va messo in una cartella del
+**PATH**.
+
+**Linux / Mac:**
+```sh
+make install                 # copia nura in ~/.local/bin
+nura file.nura               # ora funziona da ovunque (se ~/.local/bin e' nel PATH)
+```
+
+**Windows:**
+1. crea una cartella, es. `C:\Users\<tuo-nome>\bin`;
+2. copiaci dentro `nura.exe`;
+3. aggiungi quella cartella al PATH utente (Impostazioni → *Variabili d'ambiente*);
+4. apri un **nuovo** terminale: ora `nura file.nura` funziona da qualsiasi cartella.
+
 ## Il traguardo (raggiunto ✅)
 
 Il programma-obiettivo di Nura — variabili, condizioni e funzioni ricorsive — ora

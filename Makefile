@@ -24,8 +24,19 @@ test: $(BIN)
 debug:
 	sh debug/build.sh
 
+# Installa 'nura' in una cartella del PATH, cosi' si usa da ovunque (Linux/Mac).
+# Su Windows: copia nura.exe in una cartella del tuo PATH (vedi README).
+PREFIX ?= $(HOME)/.local
+install: $(BIN)
+	mkdir -p $(PREFIX)/bin
+	cp $(BIN) $(PREFIX)/bin/$(BIN)
+	@echo "Installato in $(PREFIX)/bin/$(BIN)  (assicurati che sia nel PATH)"
+
+uninstall:
+	rm -f $(PREFIX)/bin/$(BIN)
+
 # Rimuove i file compilati
 clean:
 	rm -f $(BIN) nura_flow nura_run env_demo
 
-.PHONY: test debug clean
+.PHONY: test debug clean install uninstall
