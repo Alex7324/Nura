@@ -41,6 +41,10 @@ typedef enum {
     TOKEN_GT,          /* >  */
     TOKEN_GE,          /* >= */
 
+    /* Operatori logici */
+    TOKEN_AND,         /* && */
+    TOKEN_OR,          /* || */
+
     /* Punteggiatura / struttura */
     TOKEN_LPAREN,      /* (  */
     TOKEN_RPAREN,      /* )  */

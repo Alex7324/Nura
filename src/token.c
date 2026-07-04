@@ -33,6 +33,8 @@ const char *token_type_name(TokenType type) {
         case TOKEN_LE:         return "LE";
         case TOKEN_GT:         return "GT";
         case TOKEN_GE:         return "GE";
+        case TOKEN_AND:        return "AND";
+        case TOKEN_OR:         return "OR";
         case TOKEN_LPAREN:     return "LPAREN";
         case TOKEN_RPAREN:     return "RPAREN";
         case TOKEN_LBRACE:     return "LBRACE";

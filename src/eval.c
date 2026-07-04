@@ -113,6 +113,25 @@ static double evaluate(Expr *expr, Interp *it) {
                 default:        return 0;
             }
         }
+
+        case EXPR_LOGICAL: {
+            /* CORTO CIRCUITO: valutiamo il sinistro, e il destro SOLO se serve.
+             *   falso && ...  -> gia' falso, non guardo il destro
+             *   vero  || ...  -> gia' vero,  non guardo il destro         */
+            double left = evaluate(expr->as.logical.left, it);
+            if (it->had_error) return 0;
+
+            if (expr->as.logical.op == TOKEN_OR) {
+                if (is_truthy(left)) return 1.0;
+            } else { /* TOKEN_AND */
+                if (!is_truthy(left)) return 0.0;
+            }
+
+            /* Il risultato dipende dal destro. */
+            double right = evaluate(expr->as.logical.right, it);
+            if (is_truthy(right)) return 1.0;
+            else                  return 0.0;
+        }
     }
     return 0;
 }

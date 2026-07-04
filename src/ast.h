@@ -11,6 +11,7 @@ typedef enum {
     EXPR_NUMBER,
     EXPR_UNARY,
     EXPR_BINARY,
+    EXPR_LOGICAL,    /* a && b  ,  a || b   (con corto circuito)  */
     EXPR_VARIABLE,   /* lettura di una variabile:   n            */
     EXPR_ASSIGN      /* assegnamento:               n = <expr>   */
 } ExprType;
@@ -23,6 +24,7 @@ struct Expr {
         struct { double value; } number;
         struct { TokenType op; Expr *right; } unary;
         struct { TokenType op; Expr *left; Expr *right; } binary;
+        struct { TokenType op; Expr *left; Expr *right; } logical;   /* && oppure || */
         struct { char *name; } variable;
         struct { char *name; Expr *value; } assign;
     } as;
@@ -31,6 +33,7 @@ struct Expr {
 Expr *ast_number(double value);
 Expr *ast_unary(TokenType op, Expr *right);
 Expr *ast_binary(TokenType op, Expr *left, Expr *right);
+Expr *ast_logical(TokenType op, Expr *left, Expr *right);
 Expr *ast_variable(const char *name, int length);
 Expr *ast_assign(const char *name, int length, Expr *value);
 void ast_free(Expr *expr);

@@ -48,6 +48,8 @@ static void consume(Parser *p, TokenType type, const char *message) {
 
 static Expr *expression(Parser *p);
 static Expr *assignment(Parser *p);
+static Expr *logic_or(Parser *p);
+static Expr *logic_and(Parser *p);
 static Expr *equality(Parser *p);
 static Expr *comparison(Parser *p);
 static Expr *term(Parser *p);
@@ -70,7 +72,7 @@ static Expr *expression(Parser *p) {
  * a destra: a = b = 1  diventa  a = (b = 1).
  */
 static Expr *assignment(Parser *p) {
-    Expr *left = equality(p);
+    Expr *left = logic_or(p);
 
     if (check(p, TOKEN_ASSIGN)) {
         advance(p);                       /* consuma '=' */
@@ -88,6 +90,32 @@ static Expr *assignment(Parser *p) {
         return left;
     }
 
+    return left;
+}
+
+/* logic_or -> logic_and ( "||" logic_and )*
+ * '||' e' l'operatore piu' debole tra i due logici. */
+static Expr *logic_or(Parser *p) {
+    Expr *left = logic_and(p);
+    while (check(p, TOKEN_OR)) {
+        TokenType op = p->current.type;
+        advance(p);
+        Expr *right = logic_and(p);
+        left = ast_logical(op, left, right);
+    }
+    return left;
+}
+
+/* logic_and -> equality ( "&&" equality )*
+ * '&&' lega piu' forte di '||' ma piu' debole dei confronti (==, <, ...). */
+static Expr *logic_and(Parser *p) {
+    Expr *left = equality(p);
+    while (check(p, TOKEN_AND)) {
+        TokenType op = p->current.type;
+        advance(p);
+        Expr *right = equality(p);
+        left = ast_logical(op, left, right);
+    }
     return left;
 }
 

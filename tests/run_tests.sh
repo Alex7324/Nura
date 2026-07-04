@@ -70,6 +70,17 @@ check "cicli annidati"       "var i=1; while (i<=2) { var j=1; while (j<=2) { pr
 2
 4"
 
+echo "== Operatori logici && || =="
+check "and vero"             "print 1 && 1;"                              "1"
+check "and falso"            "print 1 && 0;"                              "0"
+check "or vero"              "print 0 || 1;"                              "1"
+check "or falso"             "print 0 || 0;"                              "0"
+check "and con confronti"    "print 2 > 1 && 3 > 2;"                      "1"
+check "precedenza && su ||"  "print 1 || 0 && 0;"                         "1"
+check "corto circuito &&"    "print 0 && (1 / 0);"                        "0"
+check "corto circuito ||"    "print 1 || (1 / 0);"                        "1"
+check "logici in un if"      "var e = 20; if (e >= 18 && e < 100) print 1;" "1"
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

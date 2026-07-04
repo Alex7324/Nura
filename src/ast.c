@@ -51,6 +51,14 @@ Expr *ast_binary(TokenType op, Expr *left, Expr *right) {
     return e;
 }
 
+Expr *ast_logical(TokenType op, Expr *left, Expr *right) {
+    Expr *e = new_expr(EXPR_LOGICAL);
+    e->as.logical.op = op;
+    e->as.logical.left = left;
+    e->as.logical.right = right;
+    return e;
+}
+
 Expr *ast_variable(const char *name, int length) {
     Expr *e = new_expr(EXPR_VARIABLE);
     e->as.variable.name = copy_name(name, length);
@@ -79,6 +87,10 @@ void ast_free(Expr *expr) {
         case EXPR_BINARY:
             ast_free(expr->as.binary.left);
             ast_free(expr->as.binary.right);
+            break;
+        case EXPR_LOGICAL:
+            ast_free(expr->as.logical.left);
+            ast_free(expr->as.logical.right);
             break;
         case EXPR_VARIABLE:
             free(expr->as.variable.name);   /* liberiamo anche la stringa del nome */
@@ -109,6 +121,8 @@ static const char *op_str(TokenType op) {
         case TOKEN_LE:    return "<=";
         case TOKEN_GT:    return ">";
         case TOKEN_GE:    return ">=";
+        case TOKEN_AND:   return "&&";
+        case TOKEN_OR:    return "||";
         default:          return "?";
     }
 }
@@ -130,6 +144,13 @@ void ast_print_compact(Expr *expr) {
             ast_print_compact(expr->as.binary.right);
             printf(")");
             break;
+        case EXPR_LOGICAL:
+            printf("(%s ", op_str(expr->as.logical.op));
+            ast_print_compact(expr->as.logical.left);
+            printf(" ");
+            ast_print_compact(expr->as.logical.right);
+            printf(")");
+            break;
         case EXPR_VARIABLE:
             printf("%s", expr->as.variable.name);
             break;
@@ -146,6 +167,7 @@ static void node_label(Expr *expr, char *buf, size_t n) {
         case EXPR_NUMBER:   snprintf(buf, n, "%g", expr->as.number.value); break;
         case EXPR_UNARY:    snprintf(buf, n, "(%s)", op_str(expr->as.unary.op)); break;
         case EXPR_BINARY:   snprintf(buf, n, "(%s)", op_str(expr->as.binary.op)); break;
+        case EXPR_LOGICAL:  snprintf(buf, n, "(%s)", op_str(expr->as.logical.op)); break;
         case EXPR_VARIABLE: snprintf(buf, n, "%s", expr->as.variable.name); break;
         case EXPR_ASSIGN:   snprintf(buf, n, "(= %s)", expr->as.assign.name); break;
     }
@@ -179,6 +201,9 @@ static void print_tree(Expr *expr, const char *prefix, int is_last, int is_root)
     } else if (expr->type == EXPR_BINARY) {
         print_tree(expr->as.binary.left,  child_prefix, 0, 0);
         print_tree(expr->as.binary.right, child_prefix, 1, 0);
+    } else if (expr->type == EXPR_LOGICAL) {
+        print_tree(expr->as.logical.left,  child_prefix, 0, 0);
+        print_tree(expr->as.logical.right, child_prefix, 1, 0);
     } else if (expr->type == EXPR_ASSIGN) {
         print_tree(expr->as.assign.value, child_prefix, 1, 0);
     }

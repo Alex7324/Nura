@@ -223,6 +223,15 @@ Token lexer_next_token(Lexer *lexer) {
         case '>':
             if (match(lexer, '=')) return make_token(lexer, TOKEN_GE);
             else                   return make_token(lexer, TOKEN_GT);
+
+        /* Operatori logici: servono DOPPI (&& e ||). Un solo '&' o '|'
+         * non ha significato in Nura, quindi e' un errore. */
+        case '&':
+            if (match(lexer, '&')) return make_token(lexer, TOKEN_AND);
+            else return error_token(lexer, "Un solo '&' non e' valido: forse intendevi '&&'.");
+        case '|':
+            if (match(lexer, '|')) return make_token(lexer, TOKEN_OR);
+            else return error_token(lexer, "Un solo '|' non e' valido: forse intendevi '||'.");
     }
 
     return error_token(lexer, "Carattere non riconosciuto.");
