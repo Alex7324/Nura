@@ -2,17 +2,13 @@
 #define EVAL_H
 
 #include "ast.h"
+#include "env.h"
 
-/*
- * Valuta un albero di espressione e ne ritorna il valore numerico.
- *
- * In questa fase ogni valore e' un semplice `double` (siamo una
- * calcolatrice). I confronti (<, ==, ...) danno 1.0 per "vero" e 0.0 per
- * "falso": e' provvisorio, avremo un vero tipo booleano piu' avanti.
- *
- * Se durante il calcolo succede un errore a RUNTIME (per ora: divisione
- * per zero), stampa un messaggio e mette *had_error a 1.
- */
+/* (Fasi 1-3) Valuta una singola espressione. Usata dagli strumenti di debug. */
 double eval_expression(Expr *expr, int *had_error);
+
+/* (Fase 4) Esegue un intero programma nell'ambiente `env`, eseguendo le
+ * istruzioni in ordine. Mette *had_error a 1 se c'e' un errore a runtime. */
+void run_program(Program *program, Env *env, int *had_error);
 
 #endif /* EVAL_H */

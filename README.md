@@ -28,18 +28,21 @@ codice  →  [lexer]  →  token  →  [parser]  →  albero (AST)  →  [evalua
 
 ## A che punto sono
 
-Per ora funziona come una calcolatrice che rispetta le precedenze. Costruisce l'albero
-di un'espressione e lo valuta:
+Nura esegue programmi fatti di istruzioni, con variabili e stampa:
 
 ```sh
 gcc -Wall -Wextra -o nura src/*.c
 
-./nura "1 + 2 * 3"      # stampa l'albero e il risultato: 7
-./nura --tokens "1+2"   # stampa solo il flusso di token
+./nura "var n = 5; print n * 2;"       # 10
+./nura "var s = 0; s = s + 10; print s;"  # 10
+./nura --tokens "var n = 5;"           # stampa solo il flusso di token
 ```
 
-Gestisce `+ - * /`, i confronti (`< <= > >= == !=`), il meno unario, le parentesi,
-e segnala sia gli errori di sintassi sia quelli a runtime (es. divisione per zero).
+Gestisce: espressioni con `+ - * /`, confronti (`< <= > >= == !=`), meno unario e
+parentesi; **variabili** (`var`), **assegnamento** e l'istruzione **`print`**. Le
+variabili vivono in un ambiente realizzato come **tabella hash**. Segnala sia gli
+errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
+variabile non definita).
 
 ## Dove voglio arrivare
 
@@ -63,8 +66,8 @@ Cioè: variabili, condizioni, cicli, e funzioni che possono richiamare sé stess
 - [x] **Fase 1 — Lexer**: testo → token
 - [x] **Fase 2 — Parser + AST**: token → albero, con le precedenze
 - [x] **Fase 3 — Evaluator**: percorrere l'albero e calcolare
-- [ ] **Fase 4 — Variabili e ambiente**: `var`, assegnamento, tabella hash nome → valore
-- [ ] **Fase 5 — Istruzioni e controllo di flusso**: `print`, `if`/`else`, `while`, blocchi
+- [x] **Fase 4 — Variabili e ambiente**: `var`, assegnamento, `print`, tabella hash nome → valore
+- [ ] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`
 - [ ] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione
 
 ## Come l'ho sviluppato
@@ -80,8 +83,11 @@ scrivo il codice e mi assicuro di capire ogni parte prima di andare avanti — l
 src/
 ├── token.h / token.c     tipi di token
 ├── lexer.h / lexer.c     Fase 1 — testo → token
-├── ast.h   / ast.c       Fase 2 — nodi dell'albero
+├── ast.h   / ast.c       Fase 2 — nodi dell'albero (espressioni e istruzioni)
 ├── parser.h / parser.c   Fase 2 — token → AST
 ├── eval.h  / eval.c      Fase 3 — esecuzione dell'albero
+├── env.h   / env.c       Fase 4 — ambiente delle variabili (tabella hash)
 └── main.c                mette insieme la catena
+
+debug/                    strumenti didattici per capire il funzionamento
 ```

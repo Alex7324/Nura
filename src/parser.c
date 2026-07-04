@@ -2,15 +2,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ------------------------------------------------------------------ */
-/*  Meccanica di base: muoversi tra i token                           */
+/*  Meccanica di base                                                 */
 /* ------------------------------------------------------------------ */
 
-/* Segnala un errore di sintassi: lo stampa e alza la bandierina.
- * Per ora ci fermiamo al primo errore, non proviamo a "recuperare". */
 static void error_at(Parser *p, Token token, const char *message) {
-    if (p->had_error) return;  /* evita valanghe di errori a cascata */
+    if (p->had_error) return;
     p->had_error = 1;
     fprintf(stderr, "[riga %d] Errore di sintassi", token.line);
     if (token.type == TOKEN_EOF) {
@@ -23,40 +22,32 @@ static void error_at(Parser *p, Token token, const char *message) {
     fprintf(stderr, ": %s\n", message);
 }
 
-/* Consuma il token corrente e chiede al lexer il prossimo.
- * `previous` ricorda quello appena lasciato. */
 static void advance(Parser *p) {
     p->previous = p->current;
     p->current = lexer_next_token(&p->lexer);
 }
 
-/* Il token corrente e' di questo tipo? (senza consumarlo) */
 static int check(Parser *p, TokenType type) {
     return p->current.type == type;
 }
 
-/* Se il token corrente e' `type`, consumalo e ritorna 1. Altrimenti 0. */
 static int match(Parser *p, TokenType type) {
     if (!check(p, type)) return 0;
     advance(p);
     return 1;
 }
 
-/* Pretende un certo token; se non c'e', e' un errore di sintassi. */
 static void consume(Parser *p, TokenType type, const char *message) {
-    if (check(p, type)) {
-        advance(p);
-        return;
-    }
+    if (check(p, type)) { advance(p); return; }
     error_at(p, p->current, message);
 }
 
 /* ------------------------------------------------------------------ */
-/*  La grammatica, un livello per funzione (dal piu' debole al piu'    */
-/*  forte). Ognuna e' dichiarata prima perche' si chiamano a vicenda.  */
+/*  Grammatica delle ESPRESSIONI                                      */
 /* ------------------------------------------------------------------ */
 
 static Expr *expression(Parser *p);
+static Expr *assignment(Parser *p);
 static Expr *equality(Parser *p);
 static Expr *comparison(Parser *p);
 static Expr *term(Parser *p);
@@ -64,25 +55,42 @@ static Expr *factor(Parser *p);
 static Expr *unary(Parser *p);
 static Expr *primary(Parser *p);
 
-/* expression -> equality  (il punto di ingresso della grammatica) */
+/* expression -> assignment  (l'assegnamento e' l'operazione piu' debole) */
 static Expr *expression(Parser *p) {
-    return equality(p);
+    return assignment(p);
 }
 
 /*
- * Tutti i livelli binari hanno LA STESSA forma:
+ * assignment -> IDENTIFIER "=" assignment | equality
  *
- *   1. leggi un operando chiamando il livello SUPERIORE (piu' forte)
- *   2. FINCHE' vedi uno degli operatori di questo livello:
- *        - ricordati l'operatore
- *        - leggi un altro operando (di nuovo dal livello superiore)
- *        - impacchetta i due in un nodo BINARY, che diventa il nuovo "left"
- *
- * Il while che riusa `left` produce l'associativita' A SINISTRA:
- *   a - b - c   diventa   ((a - b) - c),  non  (a - (b - c)).
+ * Trucco classico: leggiamo la parte sinistra come una normale espressione
+ * (equality). Se poi troviamo un '=', controlliamo che il sinistro sia
+ * DAVVERO una variabile (un bersaglio valido); in tal caso costruiamo un
+ * nodo di assegnamento. La ricorsione su assignment lo rende associativo
+ * a destra: a = b = 1  diventa  a = (b = 1).
  */
+static Expr *assignment(Parser *p) {
+    Expr *left = equality(p);
 
-/* equality -> comparison ( ( "==" | "!=" ) comparison )* */
+    if (check(p, TOKEN_ASSIGN)) {
+        advance(p);                       /* consuma '=' */
+        Expr *value = assignment(p);      /* il valore (a destra) */
+
+        if (left->type == EXPR_VARIABLE) {
+            const char *name = left->as.variable.name;
+            Expr *node = ast_assign(name, (int)strlen(name), value);
+            ast_free(left);               /* non serve piu' il nodo variabile */
+            return node;
+        }
+
+        error_at(p, p->previous, "Bersaglio di assegnamento non valido.");
+        ast_free(value);
+        return left;
+    }
+
+    return left;
+}
+
 static Expr *equality(Parser *p) {
     Expr *left = comparison(p);
     while (check(p, TOKEN_EQ) || check(p, TOKEN_NEQ)) {
@@ -94,7 +102,6 @@ static Expr *equality(Parser *p) {
     return left;
 }
 
-/* comparison -> term ( ( "<" | "<=" | ">" | ">=" ) term )* */
 static Expr *comparison(Parser *p) {
     Expr *left = term(p);
     while (check(p, TOKEN_LT) || check(p, TOKEN_LE) ||
@@ -107,7 +114,6 @@ static Expr *comparison(Parser *p) {
     return left;
 }
 
-/* term -> factor ( ( "+" | "-" ) factor )* */
 static Expr *term(Parser *p) {
     Expr *left = factor(p);
     while (check(p, TOKEN_PLUS) || check(p, TOKEN_MINUS)) {
@@ -119,7 +125,6 @@ static Expr *term(Parser *p) {
     return left;
 }
 
-/* factor -> unary ( ( "*" | "/" ) unary )* */
 static Expr *factor(Parser *p) {
     Expr *left = unary(p);
     while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH)) {
@@ -131,13 +136,6 @@ static Expr *factor(Parser *p) {
     return left;
 }
 
-/*
- * unary -> "-" unary | primary
- *
- * Il meno unario e' RICORSIVO su se stesso: cosi' "--5" (meno di meno di 5)
- * e' gestito naturalmente. Se non c'e' un meno, scendiamo a primary.
- * L'associativita' qui e' a destra, ed e' quella giusta per un prefisso.
- */
 static Expr *unary(Parser *p) {
     if (check(p, TOKEN_MINUS)) {
         TokenType op = p->current.type;
@@ -148,21 +146,19 @@ static Expr *unary(Parser *p) {
     return primary(p);
 }
 
-/*
- * primary -> NUMBER | "(" expression ")"
- *
- * E' il fondo della scala: le cose "atomiche".
- * La parentesi e' il trucco che permette di forzare le precedenze: dentro
- * "(" ... ")" ricominciamo da expression (il livello piu' debole), cioe'
- * "azzeriamo" la precedenza. Nota che NON creiamo un nodo per la parentesi:
- * il suo unico scopo era far tornare qui la ricorsione; l'albero risultante
- * ha gia' la forma giusta, la parentesi ha finito il suo lavoro.
- */
+/* primary -> NUMBER | IDENTIFIER | "(" expression ")" */
 static Expr *primary(Parser *p) {
     if (check(p, TOKEN_NUMBER)) {
         double value = p->current.number;
         advance(p);
         return ast_number(value);
+    }
+
+    /* NUOVO: un identificatore da solo e' la LETTURA di una variabile. */
+    if (check(p, TOKEN_IDENTIFIER)) {
+        Expr *var = ast_variable(p->current.start, p->current.length);
+        advance(p);
+        return var;
     }
 
     if (match(p, TOKEN_LPAREN)) {
@@ -171,32 +167,79 @@ static Expr *primary(Parser *p) {
         return inner;
     }
 
-    /* Nessuna alternativa valida: errore. Ritorniamo un nodo "0" segnaposto
-     * cosi' il resto del programma non deve gestire puntatori NULL. */
-    error_at(p, p->current, "Mi aspettavo un numero o una '('.");
-    advance(p);  /* consuma il token incriminato per non restare bloccati */
+    error_at(p, p->current, "Mi aspettavo un numero, un nome o una '('.");
+    advance(p);
     return ast_number(0);
 }
 
 /* ------------------------------------------------------------------ */
-/*  Punto di ingresso pubblico                                        */
+/*  Grammatica delle ISTRUZIONI                                       */
+/* ------------------------------------------------------------------ */
+
+static Stmt *statement(Parser *p);
+static Stmt *var_declaration(Parser *p);
+static Stmt *print_statement(Parser *p);
+static Stmt *expression_statement(Parser *p);
+
+/* statement -> varDecl | printStmt | exprStmt */
+static Stmt *statement(Parser *p) {
+    if (match(p, TOKEN_VAR))   return var_declaration(p);
+    if (match(p, TOKEN_PRINT)) return print_statement(p);
+    return expression_statement(p);
+}
+
+/* varDecl -> "var" IDENTIFIER "=" expression ";"   ('var' gia' consumato) */
+static Stmt *var_declaration(Parser *p) {
+    Token name = p->current;   /* lo salvo prima di consumarlo */
+    consume(p, TOKEN_IDENTIFIER, "Mi aspettavo un nome di variabile dopo 'var'.");
+    consume(p, TOKEN_ASSIGN, "Mi aspettavo '=' dopo il nome della variabile.");
+    Expr *initializer = expression(p);
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo la dichiarazione.");
+    return stmt_var(name.start, name.length, initializer);
+}
+
+/* printStmt -> "print" expression ";"   ('print' gia' consumato) */
+static Stmt *print_statement(Parser *p) {
+    Expr *value = expression(p);
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo il valore di 'print'.");
+    return stmt_print(value);
+}
+
+/* exprStmt -> expression ";" */
+static Stmt *expression_statement(Parser *p) {
+    Expr *expr = expression(p);
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo l'espressione.");
+    return stmt_expr(expr);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Punti di ingresso pubblici                                        */
 /* ------------------------------------------------------------------ */
 
 Expr *parse_expression_source(const char *source, int *had_error) {
     Parser parser;
     lexer_init(&parser.lexer, source);
     parser.had_error = 0;
-
-    /* "Primer": carichiamo il primo token in current.
-     * (previous rimane vuoto finche' non consumiamo qualcosa.) */
     advance(&parser);
-
     Expr *tree = expression(&parser);
-
-    /* Dopo l'espressione ci aspettiamo la fine dell'input: se avanza altro
-     * testo (es. "1 2"), e' un errore. */
     consume(&parser, TOKEN_EOF, "Testo in piu' dopo l'espressione.");
-
     *had_error = parser.had_error;
     return tree;
+}
+
+/* program -> statement* EOF */
+void parse_program(const char *source, Program *program, int *had_error) {
+    Parser parser;
+    lexer_init(&parser.lexer, source);
+    parser.had_error = 0;
+    advance(&parser);            /* primer */
+
+    program_init(program);
+    while (!check(&parser, TOKEN_EOF)) {
+        Stmt *s = statement(&parser);
+        program_add(program, s);
+        if (parser.had_error) break;   /* ci fermiamo al primo errore */
+    }
+
+    *had_error = parser.had_error;
 }
