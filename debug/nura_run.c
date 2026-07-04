@@ -16,6 +16,7 @@
 #include "parser.h"
 #include "ast.h"
 #include "env.h"
+#include "pause.h"
 #include <stdio.h>
 #include <math.h>   /* fmod, per l'operatore % */
 
@@ -214,5 +215,6 @@ int main(int argc, char **argv) {
 
     env_free(&env);
     program_free(&program);
+    wait_before_closing(argc);
     return 0;
 }

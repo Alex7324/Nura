@@ -12,6 +12,7 @@
  */
 #include "env.h"
 #include <stdio.h>
+#include "pause.h"
 
 /* Disegna lo stato interno della tabella: per ogni bucket non vuoto,
  * stampa la catena di voci. */
@@ -28,7 +29,8 @@ static void dump(Env *env) {
     printf("\n");
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    (void)argv;   /* non usati: env_demo esegue sempre la stessa demo */
     Env env;
     env_init(&env);
 
@@ -63,5 +65,6 @@ int main(void) {
     dump(&env);
 
     env_free(&env);
+    wait_before_closing(argc);
     return 0;
 }

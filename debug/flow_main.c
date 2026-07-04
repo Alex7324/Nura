@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "ast.h"
 #include "eval.h"
+#include "pause.h"
 
 void flow_free(Expr *e);  /* definita in eval_flow.c */
 
@@ -33,5 +34,6 @@ int main(int argc, char **argv) {
     banner("PULIZIA: si libera l'albero (post-order) e si esce");
     flow_free(tree);
     printf("\nfine. return 0 -> il sistema operativo chiude il processo.\n");
+    wait_before_closing(argc);
     return 0;
 }
