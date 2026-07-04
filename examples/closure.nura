@@ -1,0 +1,20 @@
+// Closure: una funzione "ricorda" le variabili del posto dove e' nata.
+// Ogni chiamata a contatore() crea un contatore INDIPENDENTE, con la sua n.
+// Eseguilo con:  ./nura examples/closure.nura
+
+fun contatore() {
+    var n = 0;
+    fun conta() {
+        n = n + 1;
+        return n;
+    }
+    return conta;
+}
+
+var c = contatore();
+print c();   // 1
+print c();   // 2
+print c();   // 3
+
+var d = contatore();
+print d();   // 1   (indipendente da c)

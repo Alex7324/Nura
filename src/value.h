@@ -19,7 +19,8 @@
  * senza preoccuparsi di chi libera cosa.
  */
 
-struct Stmt;   /* dichiarazione anticipata: una funzione punta al suo nodo AST */
+struct Stmt;   /* nodo AST della funzione (corpo + parametri) */
+struct Env;    /* ambiente catturato dalla closure               */
 
 typedef enum {
     VAL_NUMBER,
@@ -32,9 +33,12 @@ typedef struct {
     ValueType type;
     union {
         double number;
-        int boolean;            /* 0 = false, 1 = true */
-        char *string;           /* puntatore "in prestito" (non posseduto) */
-        struct Stmt *function;  /* punta al nodo STMT_FUN nell'AST */
+        int boolean;    /* 0 = false, 1 = true */
+        char *string;   /* puntatore "in prestito" (non posseduto) */
+        /* Una funzione porta con se' due cose: il suo corpo (decl, nell'AST)
+         * e l'ambiente dove e' stata DEFINITA (closure). E' la closure che le
+         * permette di "ricordare" le variabili di quel posto. */
+        struct { struct Stmt *decl; struct Env *closure; } function;
     } as;
 } Value;
 
@@ -42,7 +46,7 @@ typedef struct {
 Value value_number(double n);
 Value value_bool(int b);
 Value value_string(char *s);
-Value value_function(struct Stmt *decl);
+Value value_function(struct Stmt *decl, struct Env *closure);
 
 /* Gestione memoria delle stringhe.
  * value_copy: copia profonda (duplica la stringa) — usata dall'ambiente, che

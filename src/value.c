@@ -26,10 +26,11 @@ Value value_string(char *s) {
     return v;
 }
 
-Value value_function(struct Stmt *decl) {
+Value value_function(struct Stmt *decl, struct Env *closure) {
     Value v;
     v.type = VAL_FUNCTION;
-    v.as.function = decl;
+    v.as.function.decl = decl;
+    v.as.function.closure = closure;
     return v;
 }
 
@@ -69,7 +70,7 @@ int values_equal(Value a, Value b) {
         case VAL_NUMBER:   return a.as.number == b.as.number;
         case VAL_BOOL:     return a.as.boolean == b.as.boolean;
         case VAL_STRING:   return strcmp(a.as.string, b.as.string) == 0;
-        case VAL_FUNCTION: return a.as.function == b.as.function;
+        case VAL_FUNCTION: return a.as.function.decl == b.as.function.decl;
     }
     return 0;
 }

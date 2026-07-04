@@ -190,7 +190,7 @@ static Value evaluate(Expr *expr, Interp *it) {
                 return value_number(0);
             }
 
-            Stmt *decl = callee.as.function;
+            Stmt *decl = callee.as.function.decl;
             int argc = expr->as.call.arg_count;
             int paramc = decl->as.function.param_count;
             if (argc != paramc) {
@@ -202,27 +202,30 @@ static Value evaluate(Expr *expr, Interp *it) {
                 return value_number(0);
             }
 
-            /* Nuovo scope per la chiamata: racchiude il GLOBALE (scope lessicale),
-             * cosi' la funzione vede se stessa (ricorsione) e le variabili globali,
-             * ma NON le variabili locali del chiamante. */
-            Env call_env;
-            env_init(&call_env);
-            call_env.enclosing = it->globals;
+            /* Nuovo scope per la chiamata. Racchiude l'ambiente CATTURATO dalla
+             * funzione (la sua closure), non solo il globale: cosi' la funzione
+             * vede le variabili del posto dove e' stata definita.
+             *
+             * Lo alloco sull'heap e NON lo libero: una closure potrebbe
+             * "portarselo via" (se la funzione viene restituita) e farlo vivere
+             * oltre la chiamata. Senza un garbage collector, la scelta semplice
+             * e corretta e' lasciarlo in memoria (liberato a fine processo). */
+            Env *call_env = malloc(sizeof(Env));
+            if (call_env == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+            env_init(call_env);
+            call_env->enclosing = callee.as.function.closure;
 
-            /* Valuta gli argomenti nello scope del chiamante, legali ai parametri. */
             for (int i = 0; i < paramc; i++) {
                 Value arg = evaluate(expr->as.call.args[i], it);
-                if (it->had_error) { env_free(&call_env); return value_number(0); }
-                env_define(&call_env, decl->as.function.params[i], arg);
+                if (it->had_error) return value_number(0);
+                env_define(call_env, decl->as.function.params[i], arg);
             }
 
-            /* Esegui il corpo nello scope della chiamata. */
             Env *saved = it->env;
-            it->env = &call_env;
+            it->env = call_env;
             execute(decl->as.function.body, it);
             it->env = saved;
 
-            /* Recupera il valore di ritorno (0 se la funzione non fa 'return'). */
             Value result;
             if (it->is_returning) {
                 result = it->return_value;
@@ -230,19 +233,6 @@ static Value evaluate(Expr *expr, Interp *it) {
             } else {
                 result = value_number(0);
             }
-
-            /* Se ritorniamo una stringa che "vive" nel call_env, salviamola
-             * nell'arena prima di distruggere lo scope. */
-            if (result.type == VAL_STRING) {
-                size_t len = strlen(result.as.string) + 1;
-                char *copy = malloc(len);
-                if (copy == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-                memcpy(copy, result.as.string, len);
-                intern(it, copy);
-                result = value_string(copy);
-            }
-
-            env_free(&call_env);
             return result;
         }
     }
@@ -275,12 +265,15 @@ static void execute(Stmt *stmt, Interp *it) {
 
         case STMT_BLOCK: {
             /* Un blocco crea un NUOVO scope che racchiude quello esterno:
-             * le variabili dichiarate qui dentro spariscono all'uscita. */
-            Env block_env;
-            env_init(&block_env);
-            block_env.enclosing = it->env;
+             * le variabili dichiarate qui dentro non escono dal blocco.
+             * Heap e non liberato: una closure definita nel blocco potrebbe
+             * catturarlo (stesso motivo delle chiamate). */
+            Env *block_env = malloc(sizeof(Env));
+            if (block_env == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+            env_init(block_env);
+            block_env->enclosing = it->env;
             Env *saved = it->env;
-            it->env = &block_env;
+            it->env = block_env;
 
             Program *body = &stmt->as.block.body;
             for (int i = 0; i < body->count; i++) {
@@ -289,7 +282,6 @@ static void execute(Stmt *stmt, Interp *it) {
             }
 
             it->env = saved;
-            env_free(&block_env);
             break;
         }
 
@@ -316,9 +308,10 @@ static void execute(Stmt *stmt, Interp *it) {
         }
 
         case STMT_FUN: {
-            /* Definisce una variabile col nome della funzione, il cui valore
-             * e' la funzione stessa (un puntatore al suo nodo AST). */
-            env_define(it->env, stmt->as.function.name, value_function(stmt));
+            /* La funzione cattura l'ambiente corrente (it->env) come sua
+             * "closure": cosi' ricordera' le variabili di dove e' definita. */
+            env_define(it->env, stmt->as.function.name,
+                       value_function(stmt, it->env));
             break;
         }
 

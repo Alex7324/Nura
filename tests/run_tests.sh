@@ -96,6 +96,13 @@ check "scope blocco locale"  "{ var x = 5; } print x;"     "Errore a runtime: va
 check "argomenti errati"     "fun f(a) { return a; } print f(1, 2);"  "Errore a runtime: la funzione 'f' vuole 1 argomenti, ne hai passati 2."
 check "chiamo un numero"     "print 5(3);"                 "Errore a runtime: si possono chiamare solo le funzioni."
 
+echo "== Closures =="
+check "closure ricorda"      "fun c() { var n = 0; fun f() { n = n + 1; return n; } return f; } var a = c(); print a(); print a(); print a();" "1
+2
+3"
+check "closure indipendenti" "fun c() { var n = 0; fun f() { n = n + 1; return n; } return f; } var a = c(); var b = c(); a(); print a(); print b();" "2
+1"
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

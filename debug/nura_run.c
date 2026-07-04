@@ -169,13 +169,13 @@ static Value n_eval(Expr *e, Env *env) {
                 ind(); printf("ERRORE: si possono chiamare solo le funzioni\n");
                 return value_number(0);
             }
-            Stmt *decl = callee.as.function;
+            Stmt *decl = callee.as.function.decl;
             ind(); printf(">>> CHIAMATA a '%s'  (creo un nuovo scope)\n", decl->as.function.name);
 
-            /* nuovo scope, racchiude il globale (come nell'interprete vero) */
+            /* nuovo scope, racchiude l'ambiente catturato (closure) */
             Env *call_env = malloc(sizeof(Env));   /* non liberato: leak ok per il tool */
             env_init(call_env);
-            call_env->enclosing = globals;
+            call_env->enclosing = callee.as.function.closure;
 
             for (int i = 0; i < decl->as.function.param_count && i < e->as.call.arg_count; i++) {
                 depth++;
@@ -272,7 +272,7 @@ static void n_execute(Stmt *s, Env *env, int n) {
 
         case STMT_FUN: {
             printf("\n> istruzione %d:  fun %s(...)  (definizione)\n", n, s->as.function.name);
-            env_define(env, s->as.function.name, value_function(s));
+            env_define(env, s->as.function.name, value_function(s, env));
             printf("      env_define(\"%s\", <funzione>)  ->  entra nella tabella\n",
                    s->as.function.name);
             dump_env(env);
