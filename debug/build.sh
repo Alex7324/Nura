@@ -9,7 +9,14 @@ gcc -std=c11 -I src \
     -o nura_flow
 echo "Compilato: nura_flow   (prova:  ./nura_flow \"1 + 2 * 3\")"
 
-# 2) Visualizzatore dell'AMBIENTE (Fase 4): la tabella hash nome -> valore.
+# 2) Narratore dell'ESECUZIONE (Fase 4): programma -> istruzioni -> ambiente.
+gcc -std=c11 -I src \
+    debug/nura_run.c \
+    src/parser.c src/ast.c src/lexer.c src/token.c src/env.c \
+    -o nura_run
+echo "Compilato: nura_run    (prova:  ./nura_run \"var n = 5; print n * 2;\")"
+
+# 3) Visualizzatore dell'AMBIENTE (Fase 4): la tabella hash nome -> valore.
 gcc -std=c11 -I src \
     debug/env_demo.c src/env.c \
     -o env_demo

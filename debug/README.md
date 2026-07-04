@@ -29,7 +29,23 @@ quello che accade quando si esegue un'espressione:
 Sono copie "parlanti" di `parser.c`, `eval.c` e `main.c`: `flow_parser.c`,
 `flow_eval.c`, `flow_main.c`.
 
-## 2. `env_demo` — il visualizzatore dell'ambiente (Fase 4)
+## 2. `nura_run` — il narratore dell'esecuzione (Fase 4)
+
+Mostra come viene eseguito un **programma** intero: prima gli alberi delle
+istruzioni prodotte dal parser, poi l'esecuzione passo per passo con le
+operazioni sull'**ambiente** (la tabella hash) — `env_define` quando si
+dichiara una variabile, `env_get` quando la si legge, `env_assign` quando la
+si riassegna. Dopo ogni modifica stampa lo stato dell'ambiente, così si vede
+la memoria del programma cambiare.
+
+```sh
+./nura_run "var n = 5; print n * 2;"
+./nura_run "var s = 0; s = s + 10; s = s + 20; print s;"
+```
+
+È in `nura_run.c` e usa il parser e l'ambiente veri (`src/parser.c`, `src/env.c`).
+
+## 3. `env_demo` — il visualizzatore dell'ambiente (Fase 4)
 
 Mostra com'è fatta dentro la **tabella hash** che tiene le variabili
 (`nome -> valore`): disegna i bucket e rende visibili le **collisioni**
