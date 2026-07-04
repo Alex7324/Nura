@@ -127,7 +127,7 @@ static Expr *term(Parser *p) {
 
 static Expr *factor(Parser *p) {
     Expr *left = unary(p);
-    while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH)) {
+    while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH) || check(p, TOKEN_PERCENT)) {
         TokenType op = p->current.type;
         advance(p);
         Expr *right = unary(p);

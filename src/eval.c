@@ -1,6 +1,7 @@
 #include "eval.h"
 
 #include <stdio.h>
+#include <math.h>   /* fmod, per l'operatore modulo % */
 
 static int had_runtime_error;
 
@@ -65,6 +66,9 @@ static double evaluate(Expr *expr, Env *env) {
                 case TOKEN_SLASH:
                     if (right == 0) { runtime_error("divisione per zero."); return 0; }
                     return left / right;
+                case TOKEN_PERCENT:
+                    if (right == 0) { runtime_error("modulo per zero."); return 0; }
+                    return fmod(left, right);
                 case TOKEN_EQ:  return left == right ? 1.0 : 0.0;
                 case TOKEN_NEQ: return left != right ? 1.0 : 0.0;
                 case TOKEN_LT:  return left <  right ? 1.0 : 0.0;

@@ -101,6 +101,7 @@ static const char *op_str(TokenType op) {
         case TOKEN_MINUS: return "-";
         case TOKEN_STAR:  return "*";
         case TOKEN_SLASH: return "/";
+        case TOKEN_PERCENT: return "%";
         case TOKEN_EQ:    return "==";
         case TOKEN_NEQ:   return "!=";
         case TOKEN_LT:    return "<";

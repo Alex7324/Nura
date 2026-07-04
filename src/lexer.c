@@ -206,6 +206,7 @@ Token lexer_next_token(Lexer *lexer) {
         case '-': return make_token(lexer, TOKEN_MINUS);
         case '*': return make_token(lexer, TOKEN_STAR);
         case '/': return make_token(lexer, TOKEN_SLASH);
+        case '%': return make_token(lexer, TOKEN_PERCENT);
 
         /* Simboli che possono avere un '=' subito dopo.
          * match() decide fra la versione a 1 e a 2 caratteri. */

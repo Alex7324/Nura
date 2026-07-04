@@ -24,6 +24,7 @@ const char *token_type_name(TokenType type) {
         case TOKEN_MINUS:      return "MINUS";
         case TOKEN_STAR:       return "STAR";
         case TOKEN_SLASH:      return "SLASH";
+        case TOKEN_PERCENT:    return "PERCENT";
         case TOKEN_ASSIGN:     return "ASSIGN";
         case TOKEN_EQ:         return "EQ";
         case TOKEN_BANG:       return "BANG";
