@@ -3,53 +3,64 @@
 #include <stdio.h>
 #include <math.h>   /* fmod, per l'operatore modulo % */
 
-static int had_runtime_error;
+/*
+ * Il "contesto" dell'esecuzione: raccoglie tutto lo stato che serve mentre
+ * il programma gira — l'ambiente delle variabili e la bandierina di errore.
+ *
+ * Lo passiamo esplicitamente a ogni funzione (esattamente come il Parser
+ * passa in giro il suo stato), invece di usare variabili globali. Cosi':
+ *   - le firme delle funzioni dicono la verita' su cosa toccano;
+ *   - niente stato nascosto: l'errore viaggia in modo visibile;
+ *   - e' "rientrante": potrebbero coesistere piu' esecuzioni indipendenti.
+ */
+typedef struct {
+    Env *env;
+    int had_error;
+} Interp;
 
-static void runtime_error(const char *message) {
-    if (had_runtime_error) return;
-    had_runtime_error = 1;
+static void runtime_error(Interp *it, const char *message) {
+    if (it->had_error) return;   /* segnaliamo solo il primo errore */
+    it->had_error = 1;
     fprintf(stderr, "Errore a runtime: %s\n", message);
 }
 
 /* ------------------------------------------------------------------ */
-/*  Valutazione di un'espressione (ora con l'ambiente)                */
+/*  Valutazione di un'espressione                                     */
 /* ------------------------------------------------------------------ */
 
-static double evaluate(Expr *expr, Env *env) {
+static double evaluate(Expr *expr, Interp *it) {
     switch (expr->type) {
 
         case EXPR_NUMBER:
             return expr->as.number.value;
 
-        /* Lettura di una variabile: la cerchiamo nell'ambiente. */
         case EXPR_VARIABLE: {
             double value;
-            if (!env_get(env, expr->as.variable.name, &value)) {
+            if (!env_get(it->env, expr->as.variable.name, &value)) {
                 char msg[128];
                 snprintf(msg, sizeof(msg), "variabile '%s' non definita.",
                          expr->as.variable.name);
-                runtime_error(msg);
+                runtime_error(it, msg);
                 return 0;
             }
             return value;
         }
 
-        /* Assegnamento: calcola il valore e aggiorna la variabile ESISTENTE. */
         case EXPR_ASSIGN: {
-            double value = evaluate(expr->as.assign.value, env);
-            if (!env_assign(env, expr->as.assign.name, value)) {
+            double value = evaluate(expr->as.assign.value, it);
+            if (!env_assign(it->env, expr->as.assign.name, value)) {
                 char msg[128];
                 snprintf(msg, sizeof(msg),
                          "assegnamento a variabile '%s' non definita.",
                          expr->as.assign.name);
-                runtime_error(msg);
+                runtime_error(it, msg);
                 return 0;
             }
-            return value;   /* l'assegnamento vale il valore assegnato */
+            return value;
         }
 
         case EXPR_UNARY: {
-            double right = evaluate(expr->as.unary.right, env);
+            double right = evaluate(expr->as.unary.right, it);
             switch (expr->as.unary.op) {
                 case TOKEN_MINUS: return -right;
                 default:          return 0;
@@ -57,18 +68,19 @@ static double evaluate(Expr *expr, Env *env) {
         }
 
         case EXPR_BINARY: {
-            double left  = evaluate(expr->as.binary.left, env);
-            double right = evaluate(expr->as.binary.right, env);
+            double left  = evaluate(expr->as.binary.left, it);
+            double right = evaluate(expr->as.binary.right, it);
             switch (expr->as.binary.op) {
                 case TOKEN_PLUS:  return left + right;
                 case TOKEN_MINUS: return left - right;
                 case TOKEN_STAR:  return left * right;
                 case TOKEN_SLASH:
-                    if (right == 0) { runtime_error("divisione per zero."); return 0; }
+                    if (right == 0) { runtime_error(it, "divisione per zero."); return 0; }
                     return left / right;
                 case TOKEN_PERCENT:
-                    if (right == 0) { runtime_error("modulo per zero."); return 0; }
+                    if (right == 0) { runtime_error(it, "modulo per zero."); return 0; }
                     return fmod(left, right);
+
                 /* Confronti: 1.0 = vero, 0.0 = falso (provvisorio). */
                 case TOKEN_EQ:
                     if (left == right) return 1.0;
@@ -88,6 +100,7 @@ static double evaluate(Expr *expr, Env *env) {
                 case TOKEN_GE:
                     if (left >= right) return 1.0;
                     else               return 0.0;
+
                 default:        return 0;
             }
         }
@@ -99,23 +112,23 @@ static double evaluate(Expr *expr, Env *env) {
 /*  Esecuzione di un'istruzione                                       */
 /* ------------------------------------------------------------------ */
 
-static void execute(Stmt *stmt, Env *env) {
+static void execute(Stmt *stmt, Interp *it) {
     switch (stmt->type) {
 
         case STMT_VAR: {
-            double value = evaluate(stmt->as.var.initializer, env);
-            env_define(env, stmt->as.var.name, value);   /* crea o aggiorna */
+            double value = evaluate(stmt->as.var.initializer, it);
+            env_define(it->env, stmt->as.var.name, value);
             break;
         }
 
         case STMT_PRINT: {
-            double value = evaluate(stmt->as.print.expr, env);
-            if (!had_runtime_error) printf("%g\n", value);
+            double value = evaluate(stmt->as.print.expr, it);
+            if (!it->had_error) printf("%g\n", value);
             break;
         }
 
         case STMT_EXPR: {
-            evaluate(stmt->as.expr.expr, env);   /* valuta per l'effetto (es. n = 1) */
+            evaluate(stmt->as.expr.expr, it);
             break;
         }
     }
@@ -126,10 +139,14 @@ static void execute(Stmt *stmt, Env *env) {
 /* ------------------------------------------------------------------ */
 
 void run_program(Program *program, Env *env, int *had_error) {
-    had_runtime_error = 0;
+    Interp it;
+    it.env = env;
+    it.had_error = 0;
+
     for (int i = 0; i < program->count; i++) {
-        execute(program->statements[i], env);
-        if (had_runtime_error) break;   /* al primo errore ci fermiamo */
+        execute(program->statements[i], &it);
+        if (it.had_error) break;   /* al primo errore ci fermiamo */
     }
-    *had_error = had_runtime_error;
+
+    *had_error = it.had_error;
 }
