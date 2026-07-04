@@ -124,6 +124,34 @@ static Token number(Lexer *lexer) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Stringhe: "..."                                                   */
+/* ------------------------------------------------------------------ */
+
+/* La " di apertura e' gia' stata consumata. Leggiamo fino alla " di
+ * chiusura. Il token punta al CONTENUTO, senza le virgolette. */
+static Token string(Lexer *lexer) {
+    const char *content_start = lexer->current;
+    while (peek(lexer) != '"' && !is_at_end(lexer)) {
+        if (peek(lexer) == '\n') lexer->line++;   /* stringhe su piu' righe */
+        advance(lexer);
+    }
+    if (is_at_end(lexer)) {
+        return error_token(lexer, "Stringa non chiusa: manca la '\"' finale.");
+    }
+
+    int length = (int)(lexer->current - content_start);
+    advance(lexer);   /* consuma la " di chiusura */
+
+    Token token;
+    token.type = TOKEN_STRING;
+    token.start = content_start;   /* solo il contenuto */
+    token.length = length;
+    token.line = lexer->line;
+    token.number = 0;
+    return token;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Identificatori e parole chiave                                    */
 /* ------------------------------------------------------------------ */
 
@@ -151,6 +179,8 @@ static TokenType identifier_type(Lexer *lexer) {
         { "while",  TOKEN_WHILE  },
         { "return", TOKEN_RETURN },
         { "print",  TOKEN_PRINT  },
+        { "true",   TOKEN_TRUE   },
+        { "false",  TOKEN_FALSE  },
     };
     int n = (int)(sizeof(keywords) / sizeof(keywords[0]));
 
@@ -202,6 +232,7 @@ Token lexer_next_token(Lexer *lexer) {
         case '}': return make_token(lexer, TOKEN_RBRACE);
         case ';': return make_token(lexer, TOKEN_SEMICOLON);
         case ',': return make_token(lexer, TOKEN_COMMA);
+        case '"': return string(lexer);
         case '+': return make_token(lexer, TOKEN_PLUS);
         case '-': return make_token(lexer, TOKEN_MINUS);
         case '*': return make_token(lexer, TOKEN_STAR);

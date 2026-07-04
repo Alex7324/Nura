@@ -182,6 +182,15 @@ static Expr *primary(Parser *p) {
         return ast_number(value);
     }
 
+    if (check(p, TOKEN_STRING)) {
+        Expr *s = ast_string(p->current.start, p->current.length);
+        advance(p);
+        return s;
+    }
+
+    if (check(p, TOKEN_TRUE))  { advance(p); return ast_bool(1); }
+    if (check(p, TOKEN_FALSE)) { advance(p); return ast_bool(0); }
+
     /* NUOVO: un identificatore da solo e' la LETTURA di una variabile. */
     if (check(p, TOKEN_IDENTIFIER)) {
         Expr *var = ast_variable(p->current.start, p->current.length);

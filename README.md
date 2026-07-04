@@ -45,13 +45,14 @@ make                                    # oppure: mingw32-make (Windows/MinGW)
 make test                               # esegue la suite di test automatici
 ```
 
-Gestisce: espressioni con `+ - * / %`, confronti (`< <= > >= == !=`), operatori
-logici `&&` e `||` (con corto circuito), meno unario e il not `!`, parentesi;
-**variabili** (`var`), **assegnamento** e l'istruzione **`print`**; **controllo di
-flusso** con `if`/`else`, `while` e blocchi `{ }`. Le
+Tre tipi di valore: **numeri**, **booleani** (`true`/`false`) e **stringhe**
+(`"..."`, concatenabili con `+`). Gestisce: espressioni con `+ - * / %`, confronti
+(`< <= > >= == !=`), operatori logici `&&` e `||` (con corto circuito), meno unario
+e il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
+**`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }`. Le
 variabili vivono in un ambiente realizzato come **tabella hash**. Segnala sia gli
 errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
-variabile non definita).
+variabile non definita, tipi incompatibili).
 
 Esempio (fattoriale iterativo, in `examples/fattoriale.nura`):
 

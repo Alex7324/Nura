@@ -13,6 +13,7 @@
 typedef enum {
     /* Letterali */
     TOKEN_NUMBER,      /* 123, 3.14                              */
+    TOKEN_STRING,      /* "ciao"                                 */
     TOKEN_IDENTIFIER,  /* nome di variabile o funzione: n, fattoriale */
 
     /* Parole chiave (identificatori "riservati" dal linguaggio) */
@@ -23,6 +24,8 @@ typedef enum {
     TOKEN_WHILE,
     TOKEN_RETURN,
     TOKEN_PRINT,
+    TOKEN_TRUE,
+    TOKEN_FALSE,
 
     /* Operatori aritmetici */
     TOKEN_PLUS,        /* +  */

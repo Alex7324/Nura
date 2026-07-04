@@ -9,6 +9,8 @@
 
 typedef enum {
     EXPR_NUMBER,
+    EXPR_BOOL,       /* true / false                             */
+    EXPR_STRING,     /* "ciao"                                   */
     EXPR_UNARY,
     EXPR_BINARY,
     EXPR_LOGICAL,    /* a && b  ,  a || b   (con corto circuito)  */
@@ -22,6 +24,8 @@ struct Expr {
     ExprType type;
     union {
         struct { double value; } number;
+        struct { int value; } boolean;                /* 0 = false, 1 = true */
+        struct { char *value; } string;               /* testo, posseduto dall'AST */
         struct { TokenType op; Expr *right; } unary;
         struct { TokenType op; Expr *left; Expr *right; } binary;
         struct { TokenType op; Expr *left; Expr *right; } logical;   /* && oppure || */
@@ -31,6 +35,8 @@ struct Expr {
 };
 
 Expr *ast_number(double value);
+Expr *ast_bool(int value);
+Expr *ast_string(const char *chars, int length);
 Expr *ast_unary(TokenType op, Expr *right);
 Expr *ast_binary(TokenType op, Expr *left, Expr *right);
 Expr *ast_logical(TokenType op, Expr *left, Expr *right);

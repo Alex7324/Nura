@@ -36,6 +36,18 @@ Expr *ast_number(double value) {
     return e;
 }
 
+Expr *ast_bool(int value) {
+    Expr *e = new_expr(EXPR_BOOL);
+    e->as.boolean.value = value;
+    return e;
+}
+
+Expr *ast_string(const char *chars, int length) {
+    Expr *e = new_expr(EXPR_STRING);
+    e->as.string.value = copy_name(chars, length);   /* copia posseduta dall'AST */
+    return e;
+}
+
 Expr *ast_unary(TokenType op, Expr *right) {
     Expr *e = new_expr(EXPR_UNARY);
     e->as.unary.op = op;
@@ -80,6 +92,11 @@ void ast_free(Expr *expr) {
     if (expr == NULL) return;
     switch (expr->type) {
         case EXPR_NUMBER:
+            break;
+        case EXPR_BOOL:
+            break;
+        case EXPR_STRING:
+            free(expr->as.string.value);
             break;
         case EXPR_UNARY:
             ast_free(expr->as.unary.right);
@@ -132,6 +149,13 @@ void ast_print_compact(Expr *expr) {
         case EXPR_NUMBER:
             printf("%g", expr->as.number.value);
             break;
+        case EXPR_BOOL:
+            if (expr->as.boolean.value) printf("true");
+            else                        printf("false");
+            break;
+        case EXPR_STRING:
+            printf("\"%s\"", expr->as.string.value);
+            break;
         case EXPR_UNARY:
             printf("(%s ", op_str(expr->as.unary.op));
             ast_print_compact(expr->as.unary.right);
@@ -165,6 +189,11 @@ void ast_print_compact(Expr *expr) {
 static void node_label(Expr *expr, char *buf, size_t n) {
     switch (expr->type) {
         case EXPR_NUMBER:   snprintf(buf, n, "%g", expr->as.number.value); break;
+        case EXPR_BOOL:
+            if (expr->as.boolean.value) snprintf(buf, n, "true");
+            else                        snprintf(buf, n, "false");
+            break;
+        case EXPR_STRING:   snprintf(buf, n, "\"%s\"", expr->as.string.value); break;
         case EXPR_UNARY:    snprintf(buf, n, "(%s)", op_str(expr->as.unary.op)); break;
         case EXPR_BINARY:   snprintf(buf, n, "(%s)", op_str(expr->as.binary.op)); break;
         case EXPR_LOGICAL:  snprintf(buf, n, "(%s)", op_str(expr->as.logical.op)); break;

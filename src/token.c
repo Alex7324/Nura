@@ -12,6 +12,7 @@
 const char *token_type_name(TokenType type) {
     switch (type) {
         case TOKEN_NUMBER:     return "NUMBER";
+        case TOKEN_STRING:     return "STRING";
         case TOKEN_IDENTIFIER: return "IDENTIFIER";
         case TOKEN_VAR:        return "VAR";
         case TOKEN_FUN:        return "FUN";
@@ -20,6 +21,8 @@ const char *token_type_name(TokenType type) {
         case TOKEN_WHILE:      return "WHILE";
         case TOKEN_RETURN:     return "RETURN";
         case TOKEN_PRINT:      return "PRINT";
+        case TOKEN_TRUE:       return "TRUE";
+        case TOKEN_FALSE:      return "FALSE";
         case TOKEN_PLUS:       return "PLUS";
         case TOKEN_MINUS:      return "MINUS";
         case TOKEN_STAR:       return "STAR";

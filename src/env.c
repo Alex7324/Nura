@@ -50,10 +50,11 @@ static Entry *find_entry(Env *env, const char *name) {
     return NULL;        /* non c'e' in questo bucket => non esiste */
 }
 
-void env_define(Env *env, const char *name, double value) {
+void env_define(Env *env, const char *name, Value value) {
     Entry *existing = find_entry(env, name);
     if (existing != NULL) {
-        existing->value = value;   /* gia' definita: aggiorno e basta */
+        value_free(existing->value);          /* libera il vecchio valore */
+        existing->value = value_copy(value);  /* l'ambiente ne possiede una copia */
         return;
     }
 
@@ -63,23 +64,24 @@ void env_define(Env *env, const char *name, double value) {
     Entry *e = malloc(sizeof(Entry));
     if (e == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
     e->name = copy_string(name);
-    e->value = value;
+    e->value = value_copy(value);   /* copia posseduta dall'ambiente */
     e->next = env->buckets[index];  /* il vecchio primo diventa il secondo */
     env->buckets[index] = e;        /* la nuova voce diventa la testa      */
     env->count++;
 }
 
-int env_get(Env *env, const char *name, double *out) {
+int env_get(Env *env, const char *name, Value *out) {
     Entry *e = find_entry(env, name);
     if (e == NULL) return 0;   /* non trovata */
     *out = e->value;
     return 1;
 }
 
-int env_assign(Env *env, const char *name, double value) {
+int env_assign(Env *env, const char *name, Value value) {
     Entry *e = find_entry(env, name);
     if (e == NULL) return 0;   /* non si puo' assegnare a cio' che non esiste */
-    e->value = value;
+    value_free(e->value);
+    e->value = value_copy(value);
     return 1;
 }
 
@@ -88,6 +90,7 @@ void env_free(Env *env) {
         Entry *e = env->buckets[i];
         while (e != NULL) {           /* libero l'intera lista del bucket */
             Entry *next = e->next;    /* salvo il prossimo PRIMA di liberare */
+            value_free(e->value);     /* la stringa posseduta, se c'e'      */
             free(e->name);            /* la copia del nome                 */
             free(e);                  /* la voce                           */
             e = next;
