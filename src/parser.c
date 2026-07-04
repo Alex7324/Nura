@@ -15,7 +15,8 @@ static void error_at(Parser *p, Token token, const char *message) {
     if (token.type == TOKEN_EOF) {
         fprintf(stderr, " a fine input");
     } else if (token.type == TOKEN_ERROR) {
-        fprintf(stderr, " (token illegale)");
+        /* token illegale dal lexer: `message` E' gia' la spiegazione del
+         * lexer (es. "Stringa non chiusa..."), quindi non aggiungiamo altro. */
     } else {
         fprintf(stderr, " vicino a '%.*s'", token.length, token.start);
     }
@@ -24,7 +25,14 @@ static void error_at(Parser *p, Token token, const char *message) {
 
 static void advance(Parser *p) {
     p->previous = p->current;
-    p->current = lexer_next_token(&p->lexer);
+    for (;;) {
+        p->current = lexer_next_token(&p->lexer);
+        if (p->current.type != TOKEN_ERROR) break;
+        /* Il lexer ha prodotto un token illegale: il suo messaggio (dentro
+         * token.start) spiega il problema. Lo riportiamo SUBITO, poi
+         * continuiamo a scandire cosi' il resto del parser non vede l'errore. */
+        error_at(p, p->current, p->current.start);
+    }
 }
 
 static int check(Parser *p, TokenType type) {

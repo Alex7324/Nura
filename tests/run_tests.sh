@@ -97,7 +97,8 @@ check "espressione monca"    "print 1 +;"         "[riga 1] Errore di sintassi v
 check "parentesi aperta"     "print (1 + 2;"      "[riga 1] Errore di sintassi vicino a ';': Mi aspettavo ')' per chiudere la parentesi."
 check "punto e virgola"      "var n = 1 print n;" "[riga 1] Errore di sintassi vicino a 'print': Mi aspettavo ';' dopo la dichiarazione."
 check "bersaglio invalido"   "3 = 5;"             "[riga 1] Errore di sintassi vicino a '5': Bersaglio di assegnamento non valido."
-check "stringa non chiusa"   'print "ciao;'       "[riga 1] Errore di sintassi (token illegale): Mi aspettavo un numero, un nome o una '('."
+check "stringa non chiusa"   'print "ciao;'       "[riga 1] Errore di sintassi: Stringa non chiusa: manca la '\"' finale."
+check "un solo &"            "print 1 & 2;"       "[riga 1] Errore di sintassi: Un solo '&' non e' valido: forse intendevi '&&'."
 
 echo ""
 echo "-----------------------------------------"
