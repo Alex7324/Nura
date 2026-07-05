@@ -67,11 +67,17 @@ void gc_pop_temp(int n) {
 
 /* Byte "occupati" da un oggetto, per la contabilita' della soglia (stima: la
  * sola struttura, ignoriamo items/voci; basta a decidere QUANDO raccogliere). */
+/* Byte "occupati" da un oggetto: la struttura PIU' i suoi buffer esterni, cosi'
+ * la soglia riflette la memoria vera. Deve restare simmetrico con quanto viene
+ * aggiunto a g_bytes durante la vita dell'oggetto (alloc + crescite). */
 static size_t obj_size(Obj *o) {
     switch (o->type) {
-        case OBJ_ARRAY:  return sizeof(Array);
-        case OBJ_ENV:    return sizeof(Env);
-        case OBJ_STRING: return sizeof(ObjString);
+        case OBJ_ARRAY:
+            return sizeof(Array) + (size_t)((Array *)o)->capacity * sizeof(Value);
+        case OBJ_ENV:
+            return sizeof(Env);   /* i bucket sono inline nella struct */
+        case OBJ_STRING:
+            return sizeof(ObjString) + (size_t)((ObjString *)o)->length + 1;
     }
     return 0;
 }
@@ -134,7 +140,14 @@ struct ObjString *gc_new_string(const char *chars, int length) {
     memcpy(s->chars, chars, (size_t)length);
     s->chars[length] = '\0';
     s->length = length;
+    g_bytes += (size_t)length + 1;   /* conta anche il buffer dei caratteri */
     return s;
+}
+
+/* Comunica al GC che sono stati allocati altri `n` byte per un buffer esterno di
+ * un oggetto (usata da array_push quando l'array cresce). */
+void gc_count_bytes(size_t n) {
+    g_bytes += n;
 }
 
 /* ------------------------------------------------------------------ */

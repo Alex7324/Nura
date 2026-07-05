@@ -57,6 +57,7 @@ Array *array_new(void) {
  * di program_add e dell'arena delle stringhe. */
 void array_push(Array *arr, Value v) {
     if (arr->count == arr->capacity) {
+        int old_cap = arr->capacity;
         int new_cap;
         if (arr->capacity < 8) new_cap = 8;
         else                   new_cap = arr->capacity * 2;
@@ -64,6 +65,9 @@ void array_push(Array *arr, Value v) {
         if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
         arr->items = grown;
         arr->capacity = new_cap;
+        /* Comunico al GC i byte in piu' del buffer, cosi' la soglia resta
+         * precisa (obj_size in gc.c li sottrarra' alla liberazione). */
+        gc_count_bytes((size_t)(new_cap - old_cap) * sizeof(Value));
     }
     arr->items[arr->count++] = v;
 }

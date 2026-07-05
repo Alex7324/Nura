@@ -60,4 +60,8 @@ void gc_pop_temp(int n);
  * chiamate): raccoglie se siamo oltre la soglia di memoria. */
 void gc_maybe_collect(void);
 
+/* Aggiorna il contatore dei byte vivi quando cresce un buffer esterno (es. gli
+ * elementi di un array). Serve a tenere precisa la soglia di raccolta. */
+void gc_count_bytes(size_t n);
+
 #endif /* GC_H */
