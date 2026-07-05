@@ -7,6 +7,7 @@
 #include "ast.h"
 #include "eval.h"
 #include "env.h"
+#include "gc.h"
 
 /* Modalita' diagnostica: stampa solo il flusso di token (Fase 1). */
 static void dump_tokens(const char *source) {
@@ -44,10 +45,10 @@ static int run_with_env(const char *source, Env *env) {
 
 /* Esegue un programma con un ambiente "usa e getta". */
 static int run(const char *source) {
-    Env env;
-    env_init(&env);
-    int status = run_with_env(source, &env);
-    env_free(&env);
+    gc_init();                       /* prepara il garbage collector          */
+    Env *env = gc_new_env();         /* l'ambiente globale e' un oggetto GC    */
+    int status = run_with_env(source, env);
+    gc_free_all();                   /* libera env + ogni array/ambiente creato */
     return status;
 }
 
@@ -86,8 +87,8 @@ static void repl(void) {
     printf("Scrivi istruzioni terminate da ';' e premi Invio.  Es:  print 1 + 2;\n");
     printf("Per uscire: 'exit'  (oppure Ctrl+D / Ctrl+Z + Invio).\n\n");
 
-    Env env;
-    env_init(&env);   /* un solo ambiente: le variabili persistono tra le righe */
+    gc_init();
+    Env *env = gc_new_env();   /* un solo ambiente: le variabili persistono tra le righe */
 
     char line[1024];
     for (;;) {
@@ -101,10 +102,10 @@ static void repl(void) {
             break;
         }
 
-        run_with_env(line, &env);   /* eventuali errori vengono stampati da soli */
+        run_with_env(line, env);   /* eventuali errori vengono stampati da soli */
     }
 
-    env_free(&env);
+    gc_free_all();
     printf("\nA presto!\n");
 }
 

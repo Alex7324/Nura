@@ -1,4 +1,5 @@
 #include "eval.h"
+#include "gc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,21 +25,32 @@ typedef struct {
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
     Value return_value;
     int call_depth;    /* quante chiamate di funzione annidate stiamo eseguendo */
-    char **strings;
+    char **strings;    /* arena delle stringhe create a runtime (non ancora GC) */
     int str_count;
     int str_cap;
-    /* arena degli array creati a runtime: come quella delle stringhe, li
-     * teniamo tutti qui e li liberiamo in blocco a fine programma. Serve
-     * perche' un array e' condiviso (per riferimento) e nessuna variabile lo
-     * "possiede": senza questa lista sarebbe un leak vero e proprio. */
-    Array **arrays;
-    int arr_count;
-    int arr_cap;
+    /* NB: gli array e gli ambienti NON hanno piu' un'arena qui: sono oggetti
+     * gestiti dal garbage collector (vedi gc.c), che li traccia in una sua
+     * lista globale e li liberera' lui. */
 } Interp;
 
 /* evaluate chiama execute (per le chiamate di funzione) e viceversa:
  * dichiarazione anticipata. */
 static void execute(Stmt *stmt, Interp *it);
+
+/* Puntatore all'interprete in esecuzione: serve al GC per trovare le radici.
+ * Uno solo alla volta gira, quindi va bene una variabile a livello di modulo. */
+static Interp *g_it = NULL;
+
+/* Le RADICI del garbage collector: cio' che e' sicuramente vivo. Il GC gira solo
+ * ai confini sicuri (tra un'istruzione e l'altra, con call_depth 0), dove non c'e'
+ * nessun temporaneo vivo in una variabile C: bastano l'ambiente globale e quello
+ * corrente. Da li' il GC segue i puntatori e trova tutto il resto (closures,
+ * array annidati, scope racchiudenti). */
+static void mark_roots(void) {
+    if (g_it == NULL) return;
+    gc_mark_env(g_it->globals);
+    gc_mark_env(g_it->env);
+}
 
 static void runtime_error(Interp *it, const char *message) {
     if (it->had_error) return;
@@ -59,21 +71,6 @@ static char *intern(Interp *it, char *s) {
     }
     it->strings[it->str_count++] = s;
     return s;
-}
-
-/* Registra un array creato a runtime, per liberarlo a fine programma. */
-static Array *intern_array(Interp *it, Array *arr) {
-    if (it->arr_count == it->arr_cap) {
-        int new_cap;
-        if (it->arr_cap < 8) new_cap = 8;
-        else                 new_cap = it->arr_cap * 2;
-        Array **grown = realloc(it->arrays, sizeof(Array *) * (size_t)new_cap);
-        if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-        it->arrays = grown;
-        it->arr_cap = new_cap;
-    }
-    it->arrays[it->arr_count++] = arr;
-    return arr;
 }
 
 /* Valida un accesso arr[i]: controlla che arr_v sia un array, che idx_v sia
@@ -284,9 +281,7 @@ static Value evaluate(Expr *expr, Interp *it) {
              * "portarselo via" (se la funzione viene restituita) e farlo vivere
              * oltre la chiamata. Senza un garbage collector, la scelta semplice
              * e corretta e' lasciarlo in memoria (liberato a fine processo). */
-            Env *call_env = malloc(sizeof(Env));
-            if (call_env == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-            env_init(call_env);
+            Env *call_env = gc_new_env();
             call_env->enclosing = callee.as.function.closure;
 
             for (int i = 0; i < paramc; i++) {
@@ -322,8 +317,7 @@ static Value evaluate(Expr *expr, Interp *it) {
         case EXPR_ARRAY: {
             /* Creiamo un nuovo array sull'heap (registrato nell'arena) e ci
              * mettiamo dentro, uno per uno, i valori degli elementi. */
-            Array *arr = array_new();
-            intern_array(it, arr);
+            Array *arr = array_new();   /* creato e tracciato dal GC */
             for (int i = 0; i < expr->as.array.count; i++) {
                 Value elem = evaluate(expr->as.array.elements[i], it);
                 if (it->had_error) return value_number(0);
@@ -392,15 +386,17 @@ static void execute(Stmt *stmt, Interp *it) {
              * le variabili dichiarate qui dentro non escono dal blocco.
              * Heap e non liberato: una closure definita nel blocco potrebbe
              * catturarlo (stesso motivo delle chiamate). */
-            Env *block_env = malloc(sizeof(Env));
-            if (block_env == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-            env_init(block_env);
+            Env *block_env = gc_new_env();
             block_env->enclosing = it->env;
             Env *saved = it->env;
             it->env = block_env;
 
             Program *body = &stmt->as.block.body;
             for (int i = 0; i < body->count; i++) {
+                /* Confine sicuro: fuori da ogni chiamata (call_depth 0), tra
+                 * un'istruzione e l'altra. E' qui che il GC puo' recuperare la
+                 * spazzatura accumulata (es. gli ambienti dei giri di un ciclo). */
+                if (it->call_depth == 0) gc_maybe_collect();
                 execute(body->statements[i], it);
                 if (it->had_error || it->is_returning) break;
             }
@@ -466,23 +462,27 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.strings = NULL;
     it.str_count = 0;
     it.str_cap = 0;
-    it.arrays = NULL;
-    it.arr_count = 0;
-    it.arr_cap = 0;
+
+    /* Dico al GC dove trovare le radici (via mark_roots, che legge g_it). */
+    g_it = &it;
+    gc_set_mark_roots(mark_roots);
 
     for (int i = 0; i < program->count; i++) {
+        gc_maybe_collect();   /* confine sicuro tra le istruzioni top-level */
         execute(program->statements[i], &it);
         if (it.had_error || it.is_returning) break;
     }
 
-    /* Libera le stringhe create a runtime (le concatenazioni). */
+    /* L'interprete 'it' e' locale: scollego il GC prima di uscire, cosi' non
+     * resta un puntatore penzolante. gc_free_all (in main.c) non usa le radici. */
+    gc_set_mark_roots(NULL);
+    g_it = NULL;
+
+    /* Libera le stringhe create a runtime (le concatenazioni). Gli array e gli
+     * ambienti, invece, sono ora del garbage collector: li liberera' gc_free_all
+     * (chiamato da main.c a fine programma). */
     for (int i = 0; i < it.str_count; i++) free(it.strings[i]);
     free(it.strings);
-
-    /* Libera gli array creati a runtime (buffer + struttura). Farlo solo ORA,
-     * a esecuzione finita, e' sicuro: nessuno li usa piu'. */
-    for (int i = 0; i < it.arr_count; i++) array_free(it.arrays[i]);
-    free(it.arrays);
 
     *had_error = it.had_error;
 }

@@ -46,13 +46,10 @@ Value value_array(Array *arr) {
 /*  Array dinamico                                                    */
 /* ------------------------------------------------------------------ */
 
+/* La creazione passa dal GC, che alloca l'oggetto (header incluso) e lo
+ * registra nella sua lista. Da qui in poi la memoria dell'array e' del GC. */
 Array *array_new(void) {
-    Array *arr = malloc(sizeof(Array));
-    if (arr == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-    arr->items = NULL;
-    arr->count = 0;
-    arr->capacity = 0;
-    return arr;
+    return gc_new_array();
 }
 
 /* Aggiunge un elemento in coda. Quando `items` e' pieno, RADDOPPIA la

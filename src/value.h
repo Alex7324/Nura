@@ -1,6 +1,8 @@
 #ifndef VALUE_H
 #define VALUE_H
 
+#include "gc.h"   /* per Obj: l'intestazione GC di Array */
+
 /*
  * Un Value e' un valore del linguaggio a runtime.
  *
@@ -50,6 +52,7 @@ typedef struct Array Array;
 /* Un Array e' un array dinamico di Value: stessa idea di Program (lista di
  * Stmt*) o della tabella hash. `items` cresce raddoppiando quando si riempie. */
 struct Array {
+    Obj obj;        /* intestazione GC: DEVE essere il primo campo */
     Value *items;
     int count;      /* quanti elementi ci sono davvero          */
     int capacity;   /* quanti ce ne stanno prima di dover crescere */

@@ -122,6 +122,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione, scope locale
 - [x] **Fase 7 — Array**: literal `[..]`, indicizzazione `arr[i]` in lettura e scrittura, semantica per riferimento
 - [x] **Fase 8 — Ciclo `for`**: `for (init; cond; incr)`, implementato come zucchero sintattico che il parser traduce in un `while`
+- [x] **Fase 9 — Garbage collector**: mark-and-sweep. Ambienti e array sono oggetti gestiti; la memoria dei cicli lunghi viene recuperata (niente piu' "Memoria esaurita")
 
 ## Come l'ho sviluppato
 
@@ -138,8 +139,10 @@ src/
 ├── lexer.h / lexer.c     Fase 1 — testo → token
 ├── ast.h   / ast.c       Fase 2 — nodi dell'albero (espressioni e istruzioni)
 ├── parser.h / parser.c   Fase 2 — token → AST
+├── value.h / value.c     il tipo Value (numeri, bool, stringhe, funzioni, array)
 ├── eval.h  / eval.c      Fase 3 — esecuzione dell'albero
 ├── env.h   / env.c       Fase 4 — ambiente delle variabili (tabella hash)
+├── gc.h    / gc.c        Fase 9 — garbage collector (mark-and-sweep)
 └── main.c                punto di ingresso: legge file o codice, avvia la catena
 
 debug/                    strumenti didattici per capire il funzionamento

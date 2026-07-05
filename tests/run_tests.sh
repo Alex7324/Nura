@@ -161,6 +161,15 @@ check "for annidati"         "for (var r=0; r<2; r=r+1) for (var c=0; c<2; c=c+1
 10
 11"
 
+echo "== Garbage collector (Fase 9) =="
+# Cicli lunghi che creano tanta spazzatura: il GC la raccoglie, il risultato
+# resta corretto e non si esaurisce la memoria (prima crashava con 'Memoria esaurita').
+check "GC: ciclo con garbage"  "var s=0; for(var i=0;i<200000;i=i+1){ var t=[i]; s=s+1; } print s;" "200000"
+# Ci che e' RAGGIUNGIBILE non deve essere liberato per errore (no use-after-free):
+check "GC: array vivo sopravvive" "var a=[5,6]; for(var i=0;i<200000;i=i+1){ var t=[i]; } print a[1];" "6"
+check "GC: closure sopravvive"  "fun mk(){ var n=0; fun i(){ n=n+1; return n; } return i; } var c=mk(); for(var k=0;k<200000;k=k+1){ c(); } print c();" "200001"
+check "GC: stringa viva sopravvive" 'var s="Nura"; for(var i=0;i<200000;i=i+1){ var t=[i]; } print s;' "Nura"
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

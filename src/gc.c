@@ -1,0 +1,214 @@
+#include "gc.h"
+#include "value.h"
+#include "env.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+/*
+ * Garbage collector mark-and-sweep.
+ *
+ *  MARK  : dalle "radici" (gli ambienti vivi + il valore di return in transito)
+ *          marchiamo, seguendo i puntatori, TUTTO cio' che e' raggiungibile.
+ *          I cicli (es. un array che contiene se stesso) non sono un problema:
+ *          un oggetto gia' marcato non viene rivisitato.
+ *  SWEEP : scorriamo la lista di TUTTI gli oggetti e liberiamo quelli non
+ *          marcati (irraggiungibili = spazzatura).
+ *
+ * QUANDO gira: solo ai confini tra istruzioni al livello 0 (vedi eval.c). Li'
+ * non c'e' nessun temporaneo vivo in una variabile C, quindi le radici sono
+ * solo gli ambienti: semplice e sicuro.
+ *
+ * COME marchiamo: NON per ricorsione (un albero di oggetti profondo la farebbe
+ * esplodere), ma con una "gray stack": si marca un oggetto e lo si mette in
+ * lista; poi, in un ciclo, se ne estraggono e si marcano i figli. Iterativo.
+ */
+
+static Obj   *g_objects = NULL;   /* lista di tutti gli oggetti gestiti     */
+static size_t g_bytes    = 0;     /* stima dei byte vivi (per la soglia)    */
+static size_t g_next_gc  = (size_t)1 << 20;   /* soglia: prima raccolta a ~1 MB */
+static void (*g_mark_roots)(void) = NULL;     /* callback che marca le radici   */
+
+/* La "gray stack": oggetti marcati ma di cui non abbiamo ancora marcato i figli. */
+static Obj **g_gray = NULL;
+static int   g_gray_count = 0;
+static int   g_gray_cap = 0;
+
+/* Byte "occupati" da un oggetto, per la contabilita' della soglia (stima: la
+ * sola struttura, ignoriamo items/voci; basta a decidere QUANDO raccogliere). */
+static size_t obj_size(Obj *o) {
+    switch (o->type) {
+        case OBJ_ARRAY: return sizeof(Array);
+        case OBJ_ENV:   return sizeof(Env);
+    }
+    return 0;
+}
+
+void gc_init(void) {
+    g_objects = NULL;
+    g_bytes = 0;
+    g_next_gc = (size_t)1 << 20;
+    g_gray_count = 0;
+}
+
+void gc_set_mark_roots(void (*fn)(void)) {
+    g_mark_roots = fn;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Allocazione                                                       */
+/* ------------------------------------------------------------------ */
+
+static void gc_collect(void);
+
+static void *alloc_object(size_t size, ObjType type) {
+    /* Se siamo oltre la soglia e sappiamo trovare le radici, raccogliamo PRIMA
+     * di allocare (il nuovo oggetto ancora non esiste, quindi non rischia di
+     * essere spazzato). La chiamata effettiva e' filtrata da eval.c ai confini
+     * sicuri: qui la soglia decide solo se "vale la pena". */
+    Obj *o = malloc(size);
+    if (o == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    o->type = type;
+    o->marked = 0;
+    o->next = g_objects;
+    g_objects = o;
+    g_bytes += size;
+    return o;
+}
+
+struct Array *gc_new_array(void) {
+    Array *a = alloc_object(sizeof(Array), OBJ_ARRAY);
+    a->items = NULL;
+    a->count = 0;
+    a->capacity = 0;
+    return a;
+}
+
+struct Env *gc_new_env(void) {
+    Env *e = alloc_object(sizeof(Env), OBJ_ENV);
+    env_init(e);
+    return e;
+}
+
+/* ------------------------------------------------------------------ */
+/*  MARK                                                              */
+/* ------------------------------------------------------------------ */
+
+/* Marca un oggetto e lo mette nella gray stack (se non era gia' marcato). */
+void gc_mark_object(Obj *o) {
+    if (o == NULL || o->marked) return;
+    o->marked = 1;
+
+    if (g_gray_count == g_gray_cap) {
+        int new_cap = g_gray_cap < 8 ? 8 : g_gray_cap * 2;
+        Obj **grown = realloc(g_gray, sizeof(Obj *) * (size_t)new_cap);
+        if (grown == NULL) { fprintf(stderr, "Memoria esaurita (GC).\n"); exit(1); }
+        g_gray = grown;
+        g_gray_cap = new_cap;
+    }
+    g_gray[g_gray_count++] = o;
+}
+
+void gc_mark_env(struct Env *env) {
+    gc_mark_object((Obj *)env);   /* Obj e' il primo campo: cast valido */
+}
+
+/* Marca gli oggetti eventualmente referenziati da un Value. */
+static void mark_value(Value v) {
+    if (v.type == VAL_ARRAY)         gc_mark_object((Obj *)v.as.array);
+    else if (v.type == VAL_FUNCTION) gc_mark_object((Obj *)v.as.function.closure);
+    /* numeri, booleani e stringhe non referenziano oggetti gestiti */
+}
+
+/* "Annerisce" un oggetto grigio: marca tutto cio' che referenzia. */
+static void blacken(Obj *o) {
+    switch (o->type) {
+        case OBJ_ARRAY: {
+            Array *a = (Array *)o;
+            for (int i = 0; i < a->count; i++) mark_value(a->items[i]);
+            break;
+        }
+        case OBJ_ENV: {
+            Env *e = (Env *)o;
+            for (int i = 0; i < ENV_CAPACITY; i++)
+                for (Entry *en = e->buckets[i]; en != NULL; en = en->next)
+                    mark_value(en->value);
+            gc_mark_env(e->enclosing);   /* anche lo scope che lo racchiude */
+            break;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  SWEEP                                                             */
+/* ------------------------------------------------------------------ */
+
+static void free_object(Obj *o) {
+    g_bytes -= obj_size(o);
+    switch (o->type) {
+        case OBJ_ARRAY: array_free((Array *)o);        break;
+        case OBJ_ENV:   env_free((Env *)o); free(o);   break;
+    }
+}
+
+static void sweep(void) {
+    Obj **link = &g_objects;
+    while (*link != NULL) {
+        Obj *o = *link;
+        if (o->marked) {
+            o->marked = 0;        /* pulisco per la prossima raccolta */
+            link = &o->next;
+        } else {
+            *link = o->next;      /* scollego dalla lista */
+            free_object(o);       /* e libero             */
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Il ciclo di raccolta                                             */
+/* ------------------------------------------------------------------ */
+
+static void gc_collect(void) {
+    /* 1. MARK: parti dalle radici, poi svuota la gray stack. */
+    g_gray_count = 0;
+    if (g_mark_roots) g_mark_roots();
+    while (g_gray_count > 0) {
+        Obj *o = g_gray[--g_gray_count];
+        blacken(o);
+    }
+
+    /* 2. SWEEP: libera tutto cio' che non e' stato marcato. */
+    sweep();
+
+    /* 3. Aggiorna la soglia: la prossima raccolta quando la memoria viva
+     * raddoppia (con un minimo). Cosi' il GC si auto-regola. */
+    g_next_gc = g_bytes * 2;
+    if (g_next_gc < ((size_t)1 << 20)) g_next_gc = (size_t)1 << 20;
+}
+
+/* Chiamata da eval.c ai confini sicuri: raccoglie solo se siamo oltre soglia
+ * e sappiamo trovare le radici. */
+void gc_maybe_collect(void) {
+    if (g_mark_roots != NULL && g_bytes > g_next_gc) {
+        gc_collect();
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Chiusura                                                         */
+/* ------------------------------------------------------------------ */
+
+void gc_free_all(void) {
+    Obj *o = g_objects;
+    while (o != NULL) {
+        Obj *next = o->next;
+        free_object(o);
+        o = next;
+    }
+    g_objects = NULL;
+    free(g_gray);
+    g_gray = NULL;
+    g_gray_count = 0;
+    g_gray_cap = 0;
+}

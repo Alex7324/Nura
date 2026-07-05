@@ -14,12 +14,12 @@ echo "Compilato: nura_flow   (prova:  ./nura_flow \"1 + 2 * 3\")"
 # 2) Narratore dell'ESECUZIONE (Fase 4-5): programma -> istruzioni -> ambiente.
 gcc -std=gnu11 -I src \
     debug/nura_run.c \
-    src/parser.c src/ast.c src/lexer.c src/token.c src/env.c src/value.c \
+    src/parser.c src/ast.c src/lexer.c src/token.c src/env.c src/value.c src/gc.c \
     -o nura_run -lm
 echo "Compilato: nura_run    (prova:  ./nura_run \"var n = 5; print n * 2;\")"
 
 # 3) Visualizzatore dell'AMBIENTE (Fase 4): la tabella hash nome -> valore.
 gcc -std=gnu11 -I src \
-    debug/env_demo.c src/env.c src/value.c \
+    debug/env_demo.c src/env.c src/value.c src/gc.c \
     -o env_demo -lm
 echo "Compilato: env_demo    (prova:  ./env_demo)"

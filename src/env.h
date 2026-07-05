@@ -22,6 +22,7 @@ typedef struct Entry {
 } Entry;
 
 typedef struct Env {
+    Obj obj;                 /* intestazione GC: DEVE essere il primo campo    */
     Entry *buckets[ENV_CAPACITY];
     int count;
     struct Env *enclosing;   /* lo scope che racchiude questo (NULL = globale) */
