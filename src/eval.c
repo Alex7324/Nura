@@ -6,17 +6,21 @@
 #include <string.h>
 #include <math.h>
 
-/* Limite di sicurezza per la ricorsione: oltre questa profondita' di chiamate
- * annidate diamo un errore controllato, invece di rischiare uno stack overflow
- * del C (che farebbe crashare tutto l'interprete). */
-#define MAX_CALL_DEPTH 1000
+/* Limite di sicurezza alla PROFONDITA' DI RICORSIONE di evaluate()/execute()
+ * (che si chiamano a vicenda). Oltre questa soglia diamo un errore controllato
+ * invece di rischiare uno stack overflow del C (crash secco).
+ *
+ * Perche' contiamo evaluate+execute e non solo le chiamate di funzione? Perche'
+ * lo stack C cresce sia con la ricorsione delle funzioni SIA con la profondita'
+ * dell'espressione dentro ogni livello. Una funzione con un corpo "pesante"
+ * (es. return [f(n-1)[0]+t[0]]) usa piu' stack per livello di una leggera (es.
+ * return k*f(k-1)): contare solo le chiamate non basterebbe. */
+#define MAX_DEPTH 2000
 
 /*
  * Contesto dell'esecuzione:
  *   - env: l'ambiente delle variabili
  *   - had_error: bandierina di errore a runtime
- *   - strings/str_count/str_cap: "arena" delle stringhe create a runtime
- *     (es. dalle concatenazioni), liberate tutte alla fine del programma.
  */
 typedef struct {
     Env *env;          /* scope corrente */
@@ -24,14 +28,17 @@ typedef struct {
     int had_error;
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
     Value return_value;
-    int call_depth;    /* quante chiamate di funzione annidate stiamo eseguendo */
+    int depth;         /* profondita' di ricorsione di evaluate()/execute()     */
     /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
      * collector (vedi gc.c): niente piu' arene manuali qui dentro. */
 } Interp;
 
-/* evaluate chiama execute (per le chiamate di funzione) e viceversa:
- * dichiarazione anticipata. */
-static void execute(Stmt *stmt, Interp *it);
+/* evaluate/execute si chiamano a vicenda; ognuna e' un WRAPPER col guard-rail
+ * di profondita', che delega il lavoro vero a *_impl. Dichiarazioni anticipate. */
+static Value evaluate(Expr *expr, Interp *it);
+static Value evaluate_impl(Expr *expr, Interp *it);
+static void  execute(Stmt *stmt, Interp *it);
+static void  execute_impl(Stmt *stmt, Interp *it);
 
 /* Puntatore all'interprete in esecuzione: serve al GC per trovare le radici.
  * Uno solo alla volta gira, quindi va bene una variabile a livello di modulo. */
@@ -142,7 +149,19 @@ static int is_truthy(Value v) { return value_is_truthy(v); }
 /*  Valutazione di un'espressione -> Value                            */
 /* ------------------------------------------------------------------ */
 
+/* Wrapper col guard-rail di profondita': conta la ricorsione e la limita. */
 static Value evaluate(Expr *expr, Interp *it) {
+    if (it->depth >= MAX_DEPTH) {
+        runtime_error(it, "profondita' massima superata (ricorsione o espressione troppo profonda).");
+        return value_number(0);
+    }
+    it->depth++;
+    Value v = evaluate_impl(expr, it);
+    it->depth--;
+    return v;
+}
+
+static Value evaluate_impl(Expr *expr, Interp *it) {
     switch (expr->type) {
 
         case EXPR_NUMBER: return value_number(expr->as.number.value);
@@ -293,20 +312,13 @@ static Value evaluate(Expr *expr, Interp *it) {
                 env_define(call_env, decl->as.function.params[i], arg);
             }
 
-            /* Guard-rail anti-crash: se le chiamate annidate sono troppe,
-             * diamo un errore controllato invece di far esplodere lo stack. */
-            if (it->call_depth >= MAX_CALL_DEPTH) {
-                runtime_error(it, "profondita' di ricorsione massima superata (troppe chiamate annidate).");
-                gc_pop_temp(2);
-                return value_number(0);
-            }
-
+            /* Il guard-rail anti-crash e' nel wrapper evaluate/execute (conta la
+             * profondita' totale di ricorsione): una ricorsione infinita o troppo
+             * profonda da' un errore controllato invece di far esplodere lo stack. */
             Env *saved = it->env;
             gc_push_temp((Obj *)saved);                        /* (3) */
             it->env = call_env;
-            it->call_depth++;
             execute(decl->as.function.body, it);
-            it->call_depth--;
             it->env = saved;
             gc_pop_temp(3);   /* (3),(2),(1): saved, call_env, closure */
 
@@ -375,7 +387,18 @@ static Value evaluate(Expr *expr, Interp *it) {
 /*  Esecuzione di un'istruzione                                       */
 /* ------------------------------------------------------------------ */
 
+/* Wrapper col guard-rail di profondita' (gemello di quello di evaluate). */
 static void execute(Stmt *stmt, Interp *it) {
+    if (it->depth >= MAX_DEPTH) {
+        runtime_error(it, "profondita' massima superata (ricorsione o espressione troppo profonda).");
+        return;
+    }
+    it->depth++;
+    execute_impl(stmt, it);
+    it->depth--;
+}
+
+static void execute_impl(Stmt *stmt, Interp *it) {
     switch (stmt->type) {
 
         case STMT_VAR: {
@@ -478,7 +501,7 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.had_error = 0;
     it.is_returning = 0;
     it.return_value = value_number(0);
-    it.call_depth = 0;
+    it.depth = 0;
 
     /* Dico al GC dove trovare le radici (via mark_roots, che legge g_it). */
     g_it = &it;
