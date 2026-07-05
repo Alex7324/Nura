@@ -22,7 +22,10 @@
  *   - env: l'ambiente delle variabili
  *   - had_error: bandierina di errore a runtime
  */
-typedef struct {
+/* Con il tag 'Interp' (non anonima) cosi' combacia con la forward-declaration
+ * 'struct Interp' di value.h, usata dal tipo NativeFn. */
+typedef struct Interp Interp;
+struct Interp {
     Env *env;          /* scope corrente */
     Env *globals;      /* scope globale (i corpi delle funzioni lo racchiudono) */
     int had_error;
@@ -31,7 +34,7 @@ typedef struct {
     int depth;         /* profondita' di ricorsione di evaluate()/execute()     */
     /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
      * collector (vedi gc.c): niente piu' arene manuali qui dentro. */
-} Interp;
+};
 
 /* evaluate/execute si chiamano a vicenda; ognuna e' un WRAPPER col guard-rail
  * di profondita', che delega il lavoro vero a *_impl. Dichiarazioni anticipate. */
@@ -144,6 +147,38 @@ static Value concat(Interp *it, const char *a, const char *b) {
 
 /* Regola di verita' condivisa (delega a value.c). */
 static int is_truthy(Value v) { return value_is_truthy(v); }
+
+/* ------------------------------------------------------------------ */
+/*  Funzioni native (scritte in C, esposte a Nura)                    */
+/* ------------------------------------------------------------------ */
+
+/* len(x): la lunghezza di un array o di una stringa. */
+static Value native_len(Interp *it, int argc, Value *args) {
+    (void)argc;   /* l'arieta' (1) e' gia' controllata da chi chiama */
+    Value v = args[0];
+    if (v.type == VAL_ARRAY)  return value_number(v.as.array->count);
+    if (v.type == VAL_STRING) return value_number(v.as.string->length);
+    runtime_error(it, "len() vuole un array o una stringa.");
+    return value_number(0);
+}
+
+/* push(arr, x): aggiunge x in coda all'array (condiviso: la modifica si vede da
+ * tutte le variabili che puntano allo stesso array). Ritorna la nuova lunghezza. */
+static Value native_push(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_ARRAY) {
+        runtime_error(it, "push() vuole un array come primo argomento.");
+        return value_number(0);
+    }
+    array_push(args[0].as.array, args[1]);
+    return value_number(args[0].as.array->count);
+}
+
+/* Registra le native nell'ambiente globale, prima di eseguire il programma. */
+static void define_natives(Env *globals) {
+    env_define(globals, "len",  value_native("len",  native_len,  1));
+    env_define(globals, "push", value_native("push", native_push, 2));
+}
 
 /* ------------------------------------------------------------------ */
 /*  Valutazione di un'espressione -> Value                            */
@@ -275,6 +310,33 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
         case EXPR_CALL: {
             Value callee = evaluate(expr->as.call.callee, it);
             if (it->had_error) return callee;
+
+            /* Chiamata a una funzione NATIVA (scritta in C). */
+            if (callee.type == VAL_NATIVE) {
+                int argc = expr->as.call.arg_count;
+                if (callee.as.native.arity >= 0 && argc != callee.as.native.arity) {
+                    char msg[128];
+                    snprintf(msg, sizeof(msg),
+                             "la funzione '%s' vuole %d argomenti, ne hai passati %d.",
+                             callee.as.native.name, callee.as.native.arity, argc);
+                    runtime_error(it, msg);
+                    return value_number(0);
+                }
+                Value *args = (argc > 0) ? malloc(sizeof(Value) * (size_t)argc) : NULL;
+                if (argc > 0 && args == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                int pushed = 0;
+                for (int i = 0; i < argc; i++) {
+                    args[i] = evaluate(expr->as.call.args[i], it);
+                    if (it->had_error) { gc_pop_temp(pushed); free(args); return value_number(0); }
+                    gc_push_temp(value_obj(args[i]));   /* proteggo gli arg gia' pronti */
+                    pushed++;
+                }
+                Value result = callee.as.native.fn(it, argc, args);
+                gc_pop_temp(pushed);
+                free(args);
+                return result;
+            }
+
             if (callee.type != VAL_FUNCTION) {
                 runtime_error(it, "si possono chiamare solo le funzioni.");
                 return value_number(0);
@@ -502,6 +564,10 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.is_returning = 0;
     it.return_value = value_number(0);
     it.depth = 0;
+
+    /* Rendo disponibili le funzioni native (len, push, ...) nell'ambiente
+     * globale, prima di eseguire il programma. */
+    define_natives(env);
 
     /* Dico al GC dove trovare le radici (via mark_roots, che legge g_it). */
     g_it = &it;

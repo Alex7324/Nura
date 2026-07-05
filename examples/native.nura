@@ -1,0 +1,40 @@
+// Funzioni native: len e push
+// Eseguilo con:  ./nura examples/native.nura
+
+// len() dà la lunghezza di un array o di una stringa.
+print len([10, 20, 30]);       // 3
+print len("Nura");             // 4
+print len([]);                 // 0
+
+// push() aggiunge in coda a un array, che così CRESCE.
+// Ritorna la nuova lunghezza; l'array è modificato sul posto.
+var a = [];
+for (var i = 1; i <= 5; i = i + 1) {
+    push(a, i * i);
+}
+print a;                       // [1, 4, 9, 16, 25]
+print len(a);                  // 5
+
+// Ora si può scorrere un array senza sapere la lunghezza a memoria:
+var somma = 0;
+for (var i = 0; i < len(a); i = i + 1) {
+    somma = somma + a[i];
+}
+print somma;                   // 55
+
+// push funziona per riferimento: modificare via una variabile si vede dall'altra.
+var b = a;
+push(b, 36);
+print len(a);                  // 6   (aggiunto anche ad a!)
+
+// Una funzione che filtra i pari, costruendo il risultato con push.
+fun soloPari(lista) {
+    var out = [];
+    for (var i = 0; i < len(lista); i = i + 1) {
+        if (lista[i] % 2 == 0) {
+            push(out, lista[i]);
+        }
+    }
+    return out;
+}
+print soloPari([1, 2, 3, 4, 5, 6]);   // [2, 4, 6]

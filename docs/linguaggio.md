@@ -326,9 +326,36 @@ fun fattoriale(k) {
 print fattoriale(5);         // 120
 ```
 
-> ⚠️ **Limite di profondità.** Per evitare crash, la ricorsione ha un tetto: oltre
-> circa **1000 chiamate annidate**, Nura interrompe con un errore a runtime
-> ("profondità di ricorsione massima superata") invece di bloccarsi.
+> ⚠️ **Limite di profondità.** Per evitare crash, la ricorsione — e le espressioni
+> molto profonde — hanno un tetto: oltre un certo livello di annidamento Nura
+> interrompe con un errore a runtime ("profondità massima superata") invece di
+> bloccarsi con uno *stack overflow*.
+
+### Funzioni native (`len`, `push`)
+Alcune funzioni sono **già pronte**: sono scritte in C dentro l'interprete (si
+chiamano *native*), ma si usano come qualsiasi altra funzione.
+
+- **`len(x)`** — la lunghezza di un array o di una stringa.
+- **`push(arr, x)`** — aggiunge `x` in coda all'array `arr` (che così *cresce*) e
+  restituisce la nuova lunghezza. L'array è modificato sul posto (per riferimento).
+
+```
+var a = [];
+for (var i = 0; i < 5; i = i + 1) {
+    push(a, i * i);          // costruisco la lista un pezzo alla volta
+}
+print a;                     // [0, 1, 4, 9, 16]
+print len(a);                // 5
+
+// scorrere un array senza sapere la lunghezza a memoria:
+var somma = 0;
+for (var i = 0; i < len(a); i = i + 1) {
+    somma = somma + a[i];
+}
+print somma;                 // 30
+
+print len("ciao");           // 4
+```
 
 ## 11. Closures
 

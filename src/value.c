@@ -35,6 +35,15 @@ Value value_function(struct Stmt *decl, struct Env *closure) {
     return v;
 }
 
+Value value_native(const char *name, NativeFn fn, int arity) {
+    Value v;
+    v.type = VAL_NATIVE;
+    v.as.native.name = name;
+    v.as.native.fn = fn;
+    v.as.native.arity = arity;
+    return v;
+}
+
 Value value_array(Array *arr) {
     Value v;
     v.type = VAL_ARRAY;
@@ -103,6 +112,7 @@ int value_is_truthy(Value v) {
         case VAL_NUMBER:   return v.as.number != 0;
         case VAL_STRING:   return 1;
         case VAL_FUNCTION: return 1;
+        case VAL_NATIVE:   return 1;
         case VAL_ARRAY:    return 1;   /* un array (anche vuoto) e' "vero" */
     }
     return 0;
@@ -117,6 +127,7 @@ int values_equal(Value a, Value b) {
         case VAL_BOOL:     return a.as.boolean == b.as.boolean;
         case VAL_STRING:   return strcmp(a.as.string->chars, b.as.string->chars) == 0;
         case VAL_FUNCTION: return a.as.function.decl == b.as.function.decl;
+        case VAL_NATIVE:   return a.as.native.fn == b.as.native.fn;
         /* Due array sono "uguali" solo se sono LO STESSO array (stesso
          * puntatore), coerente con la semantica per riferimento: proprio come
          * per le funzioni, confrontiamo l'identita', non il contenuto. */
@@ -165,6 +176,9 @@ static void value_print_depth(Value v, int depth) {
         case VAL_FUNCTION:
             printf("<funzione>");
             break;
+        case VAL_NATIVE:
+            printf("<nativa %s>", v.as.native.name);
+            break;
         case VAL_ARRAY: {
             Array *arr = v.as.array;
             if (depth >= MAX_PRINT_DEPTH) {   /* troppo annidato (o ciclico) */
@@ -192,6 +206,7 @@ const char *value_type_name(ValueType t) {
         case VAL_BOOL:     return "booleano";
         case VAL_STRING:   return "stringa";
         case VAL_FUNCTION: return "funzione";
+        case VAL_NATIVE:   return "funzione nativa";
         case VAL_ARRAY:    return "array";
     }
     return "?";

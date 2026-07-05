@@ -40,6 +40,7 @@ typedef enum {
     VAL_BOOL,
     VAL_STRING,
     VAL_FUNCTION,
+    VAL_NATIVE,     /* funzione scritta in C ed esposta a Nura (es. len, push) */
     VAL_ARRAY
 } ValueType;
 
@@ -49,6 +50,12 @@ typedef enum {
 typedef struct Value Value;
 typedef struct Array Array;
 typedef struct ObjString ObjString;
+
+/* Una funzione NATIVA e' scritta in C. Riceve l'interprete (per segnalare
+ * errori e allocare), il numero di argomenti e i loro valori, e ritorna un
+ * Value. `struct Interp` e' definito in eval.c: qui basta il nome. */
+struct Interp;
+typedef Value (*NativeFn)(struct Interp *it, int argc, Value *args);
 
 /* Un Array e' un array dinamico di Value: stessa idea di Program (lista di
  * Stmt*) o della tabella hash. `items` cresce raddoppiando quando si riempie. */
@@ -78,6 +85,9 @@ struct Value {
          * e l'ambiente dove e' stata DEFINITA (closure). E' la closure che le
          * permette di "ricordare" le variabili di quel posto. */
         struct { struct Stmt *decl; struct Env *closure; } function;
+        /* Una nativa: il puntatore alla funzione C, il nome (per i messaggi) e
+         * l'arieta' attesa (-1 = qualsiasi numero di argomenti). */
+        struct { const char *name; NativeFn fn; int arity; } native;
         Array *array;   /* puntatore condiviso, non posseduto dal Value */
     } as;
 };
@@ -87,6 +97,7 @@ Value value_number(double n);
 Value value_bool(int b);
 Value value_string(ObjString *s);
 Value value_function(struct Stmt *decl, struct Env *closure);
+Value value_native(const char *name, NativeFn fn, int arity);
 Value value_array(Array *arr);
 
 /* Gestione degli array (l'arena in eval.c possiede la memoria). */

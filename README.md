@@ -123,6 +123,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 7 — Array**: literal `[..]`, indicizzazione `arr[i]` in lettura e scrittura, semantica per riferimento
 - [x] **Fase 8 — Ciclo `for`**: `for (init; cond; incr)`, implementato come zucchero sintattico che il parser traduce in un `while`
 - [x] **Fase 9 — Garbage collector**: mark-and-sweep. Ambienti, array e stringhe sono oggetti gestiti; la memoria dei cicli lunghi viene recuperata anche dentro le funzioni (radici temporanee). Diagnostica con `NURA_GC_LOG` / `NURA_GC_STRESS`
+- [x] **Fase 10 — Funzioni native**: funzioni scritte in C ed esposte a Nura (`VAL_NATIVE`). Prime due: `len()` e `push()`
 
 ## Come l'ho sviluppato
 

@@ -178,6 +178,18 @@ check "GC: ciclo dentro funzione" "fun run(){ var s=0; for(var i=0;i<200000;i=i+
 check "GC: array literal span chiamate" "fun mk(x){return [x,x];} print [mk(1),mk(2)];" "[[1, 1], [2, 2]]"
 check "GC: arg che alloca tra gli arg" "fun s3(a,b,c){return a+b+c;} fun m(){return [1];} print s3(m()[0],m()[0],m()[0]);" "3"
 
+echo "== Fase 10: funzioni native (len, push) =="
+check "len di array"         "print len([10,20,30]);"                 "3"
+check "len di stringa"       'print len("ciao");'                     "4"
+check "len di array vuoto"   "print len([]);"                         "0"
+check "push muta e ritorna len" "var a=[1,2]; print push(a,3); print a;" "3
+[1, 2, 3]"
+check "costruire con push"   "var a=[]; for(var i=0;i<4;i=i+1){ push(a,i*i); } print a;" "[0, 1, 4, 9]"
+check "scorrere con len"     "var a=[5,7,9]; var s=0; for(var i=0;i<len(a);i=i+1){ s=s+a[i]; } print s;" "21"
+check "len arieta' errata"   "print len(1,2);"      "Errore a runtime: la funzione 'len' vuole 1 argomenti, ne hai passati 2."
+check "len tipo errato"      "print len(42);"       "Errore a runtime: len() vuole un array o una stringa."
+check "push tipo errato"     "push(5, 1);"          "Errore a runtime: push() vuole un array come primo argomento."
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."
