@@ -189,6 +189,16 @@ check "scorrere con len"     "var a=[5,7,9]; var s=0; for(var i=0;i<len(a);i=i+1
 check "len arieta' errata"   "print len(1,2);"      "Errore a runtime: la funzione 'len' vuole 1 argomenti, ne hai passati 2."
 check "len tipo errato"      "print len(42);"       "Errore a runtime: len() vuole un array o una stringa."
 check "push tipo errato"     "push(5, 1);"          "Errore a runtime: push() vuole un array come primo argomento."
+check "pop toglie l'ultimo"  "var a=[1,2,3]; print pop(a); print a;" "3
+[1, 2]"
+check "pop su array vuoto"   "pop([]);"             "Errore a runtime: pop() su un array vuoto."
+check "str di numero"        'print "n=" + str(42);'                 "n=42"
+check "str di decimale"      "print str(3.14);"                      "3.14"
+check "str di bool"          "print str(true);"                      "true"
+check "str di array annidato" 'print str([1,"x",[2,3]]);'            '[1, "x", [2, 3]]'
+check "num da stringa"       'print num("42") + 1;'                  "43"
+check "num con spazi"        'print num("  10  ");'                  "10"
+check "num non valido"       'print num("ciao");'   "Errore a runtime: num(): la stringa non e' un numero valido."
 
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."

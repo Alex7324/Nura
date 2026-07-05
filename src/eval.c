@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>   /* clock() per la nativa clock() */
 
 /* Limite di sicurezza alla PROFONDITA' DI RICORSIONE di evaluate()/execute()
  * (che si chiamano a vicenda). Oltre questa soglia diamo un errore controllato
@@ -174,10 +175,131 @@ static Value native_push(Interp *it, int argc, Value *args) {
     return value_number(args[0].as.array->count);
 }
 
+/* pop(arr): toglie e restituisce l'ultimo elemento dell'array (che si accorcia). */
+static Value native_pop(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_ARRAY) {
+        runtime_error(it, "pop() vuole un array.");
+        return value_number(0);
+    }
+    Array *a = args[0].as.array;
+    if (a->count == 0) {
+        runtime_error(it, "pop() su un array vuoto.");
+        return value_number(0);
+    }
+    return a->items[--a->count];   /* accorcia; la capacita' non cambia */
+}
+
+/* ---- str(x): converte un valore nella sua rappresentazione testuale ---- */
+
+#define STR_MAX_DEPTH 100   /* per array annidati o ciclici */
+
+/* Appende `s` a un buffer che cresce da solo (semplice string builder). */
+static void sb_append(char **buf, int *len, int *cap, const char *s) {
+    int slen = (int)strlen(s);
+    if (*len + slen + 1 > *cap) {
+        int nc = (*cap < 32) ? 32 : *cap;
+        while (nc < *len + slen + 1) nc *= 2;
+        char *g = realloc(*buf, (size_t)nc);
+        if (g == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+        *buf = g; *cap = nc;
+    }
+    memcpy(*buf + *len, s, (size_t)slen);
+    *len += slen;
+    (*buf)[*len] = '\0';
+}
+
+/* Scrive nel buffer la rappresentazione di v (gemello di value_print, ma su
+ * stringa). Le stringhe dentro un array vengono messe tra virgolette. */
+static void stringify(Value v, char **buf, int *len, int *cap, int depth) {
+    char tmp[64];
+    switch (v.type) {
+        case VAL_NUMBER: {
+            double n = v.as.number;
+            if (isfinite(n) && n == floor(n) && fabs(n) < 1e15) snprintf(tmp, sizeof(tmp), "%.0f", n);
+            else                                                snprintf(tmp, sizeof(tmp), "%g", n);
+            sb_append(buf, len, cap, tmp);
+            break;
+        }
+        case VAL_BOOL:     sb_append(buf, len, cap, v.as.boolean ? "true" : "false"); break;
+        case VAL_STRING:   sb_append(buf, len, cap, v.as.string->chars); break;
+        case VAL_FUNCTION: sb_append(buf, len, cap, "<funzione>"); break;
+        case VAL_NATIVE:
+            snprintf(tmp, sizeof(tmp), "<nativa %s>", v.as.native.name);
+            sb_append(buf, len, cap, tmp);
+            break;
+        case VAL_ARRAY: {
+            if (depth >= STR_MAX_DEPTH) { sb_append(buf, len, cap, "[...]"); break; }
+            Array *a = v.as.array;
+            sb_append(buf, len, cap, "[");
+            for (int i = 0; i < a->count; i++) {
+                if (i > 0) sb_append(buf, len, cap, ", ");
+                if (a->items[i].type == VAL_STRING) {
+                    sb_append(buf, len, cap, "\"");
+                    sb_append(buf, len, cap, a->items[i].as.string->chars);
+                    sb_append(buf, len, cap, "\"");
+                } else {
+                    stringify(a->items[i], buf, len, cap, depth + 1);
+                }
+            }
+            sb_append(buf, len, cap, "]");
+            break;
+        }
+    }
+}
+
+static Value native_str(Interp *it, int argc, Value *args) {
+    (void)it; (void)argc;
+    char *buf = NULL; int len = 0, cap = 0;
+    stringify(args[0], &buf, &len, &cap, 0);
+    ObjString *s = gc_new_string(buf ? buf : "", len);
+    free(buf);
+    return value_string(s);
+}
+
+/* num(s): converte una stringa in un numero. Errore se non e' un numero valido. */
+static Value native_num(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING) {
+        runtime_error(it, "num() vuole una stringa.");
+        return value_number(0);
+    }
+    const char *s = args[0].as.string->chars;
+    char *end;
+    double d = strtod(s, &end);
+    while (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r') end++;
+    if (end == s || *end != '\0') {
+        runtime_error(it, "num(): la stringa non e' un numero valido.");
+        return value_number(0);
+    }
+    return value_number(d);
+}
+
+/* clock(): secondi (con decimali) di tempo CPU da inizio programma. Per misurare. */
+static Value native_clock(Interp *it, int argc, Value *args) {
+    (void)it; (void)argc; (void)args;
+    return value_number((double)clock() / (double)CLOCKS_PER_SEC);
+}
+
+/* input(): legge una riga da tastiera e la ritorna come stringa (senza a-capo). */
+static Value native_input(Interp *it, int argc, Value *args) {
+    (void)it; (void)argc; (void)args;
+    char line[4096];
+    if (fgets(line, sizeof(line), stdin) == NULL) return value_string(gc_new_string("", 0));
+    int n = (int)strlen(line);
+    while (n > 0 && (line[n-1] == '\n' || line[n-1] == '\r')) n--;   /* toglie l'a-capo */
+    return value_string(gc_new_string(line, n));
+}
+
 /* Registra le native nell'ambiente globale, prima di eseguire il programma. */
 static void define_natives(Env *globals) {
-    env_define(globals, "len",  value_native("len",  native_len,  1));
-    env_define(globals, "push", value_native("push", native_push, 2));
+    env_define(globals, "len",   value_native("len",   native_len,   1));
+    env_define(globals, "push",  value_native("push",  native_push,  2));
+    env_define(globals, "pop",   value_native("pop",   native_pop,   1));
+    env_define(globals, "str",   value_native("str",   native_str,   1));
+    env_define(globals, "num",   value_native("num",   native_num,   1));
+    env_define(globals, "clock", value_native("clock", native_clock, 0));
+    env_define(globals, "input", value_native("input", native_input, 0));
 }
 
 /* ------------------------------------------------------------------ */
