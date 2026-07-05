@@ -23,3 +23,6 @@ env_demo
 # File di sistema
 Thumbs.db
 .DS_Store
+
+# PDF generati localmente (guida personale, non nel repo)
+*.pdf

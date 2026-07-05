@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>    /* floor, isfinite, fabs: per stampare bene i numeri */
 
 Value value_number(double n) {
     Value v;
@@ -148,9 +149,17 @@ static void print_element(Value v, int depth) {
 
 static void value_print_depth(Value v, int depth) {
     switch (v.type) {
-        case VAL_NUMBER:
-            printf("%g", v.as.number);
+        case VAL_NUMBER: {
+            double n = v.as.number;
+            /* Se e' un intero "vero" (entro ~2^53, dove i double sono ancora
+             * esatti) lo stampiamo per esteso: 1000000, non "1e+06". Altrimenti
+             * usiamo %g, che tiene puliti i decimali (3.14, 0.333333). */
+            if (isfinite(n) && n == floor(n) && fabs(n) < 1e15)
+                printf("%.0f", n);
+            else
+                printf("%g", n);
             break;
+        }
         case VAL_BOOL:
             if (v.as.boolean) printf("true");
             else              printf("false");
