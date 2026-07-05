@@ -45,8 +45,9 @@ make                                    # oppure: mingw32-make (Windows/MinGW)
 make test                               # esegue la suite di test automatici
 ```
 
-Tre tipi di valore: **numeri**, **booleani** (`true`/`false`) e **stringhe**
-(`"..."`, concatenabili con `+`). Gestisce: espressioni con `+ - * / %`, confronti
+Quattro tipi di valore: **numeri**, **booleani** (`true`/`false`), **stringhe**
+(`"..."`, concatenabili con `+`) e **array** (`[1, 2, 3]`, liste indicizzabili con
+`arr[i]` e passate **per riferimento**). Gestisce: espressioni con `+ - * / %`, confronti
 (`< <= > >= == !=`), operatori logici `&&` e `||` (con corto circuito), meno unario
 e il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
 **`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }` con
@@ -119,6 +120,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 4 — Variabili e ambiente**: `var`, assegnamento, `print`, tabella hash nome → valore
 - [x] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`, operatore `!`
 - [x] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione, scope locale
+- [x] **Fase 7 — Array**: literal `[..]`, indicizzazione `arr[i]` in lettura e scrittura, semantica per riferimento
 
 ## Come l'ho sviluppato
 

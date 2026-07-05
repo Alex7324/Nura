@@ -3,7 +3,7 @@
  * Mostra un PROGRAMMA intero: la lista di istruzioni prodotta dal parser, e
  * poi l'esecuzione passo per passo, con le operazioni sull'AMBIENTE (la
  * tabella hash): env_define, env_get, env_assign. I valori possono essere
- * numeri, booleani o stringhe (Value).
+ * numeri, booleani, stringhe, funzioni o array (Value).
  *
  * Usa il parser e l'ambiente VERI (src/parser.c, src/env.c, src/value.c):
  * l'unica cosa "parlante" e' l'esecuzione, scritta qui apposta per narrarla.
@@ -197,6 +197,60 @@ static Value n_eval(Expr *e, Env *env) {
             ind(); printf("<<< '%s' ritorna ", decl->as.function.name);
             value_print(result); printf("\n");
             return result;
+        }
+
+        case EXPR_ARRAY: {
+            int c = e->as.array.count;
+            ind(); printf("costruisco un array di %d element%s\n", c, c == 1 ? "o" : "i");
+            Array *arr = array_new();   /* leak ok per il tool */
+            for (int i = 0; i < c; i++) {
+                depth++;
+                Value elem = n_eval(e->as.array.elements[i], env);
+                depth--;
+                array_push(arr, elem);
+            }
+            Value res = value_array(arr);
+            ind(); printf("array pronto -> "); value_print(res); printf("\n");
+            return res;
+        }
+
+        case EXPR_INDEX: {
+            depth++;
+            Value arr_v = n_eval(e->as.index.array, env);
+            Value idx_v = n_eval(e->as.index.index, env);
+            depth--;
+            ind();
+            if (arr_v.type != VAL_ARRAY) { printf("ERRORE: non e' un array\n"); return value_number(0); }
+            int i = (int)idx_v.as.number;
+            Array *arr = arr_v.as.array;
+            if (i < 0 || i >= arr->count) {
+                printf("ERRORE: indice %d fuori dai limiti (%d elementi)\n", i, arr->count);
+                return value_number(0);
+            }
+            Value res = arr->items[i];
+            printf("leggo "); value_print(arr_v);
+            printf("[%d] -> ", i); value_print(res); printf("\n");
+            return res;
+        }
+
+        case EXPR_INDEX_SET: {
+            depth++;
+            Value arr_v = n_eval(e->as.index_set.array, env);
+            Value idx_v = n_eval(e->as.index_set.index, env);
+            Value val   = n_eval(e->as.index_set.value, env);
+            depth--;
+            ind();
+            if (arr_v.type != VAL_ARRAY) { printf("ERRORE: non e' un array\n"); return value_number(0); }
+            int i = (int)idx_v.as.number;
+            Array *arr = arr_v.as.array;
+            if (i < 0 || i >= arr->count) {
+                printf("ERRORE: indice %d fuori dai limiti (%d elementi)\n", i, arr->count);
+                return value_number(0);
+            }
+            arr->items[i] = val;   /* l'array e' condiviso: la modifica si propaga */
+            printf("scrivo "); value_print(val);
+            printf(" in posizione [%d] -> ora l'array e' ", i); value_print(arr_v); printf("\n");
+            return val;
         }
     }
     return value_number(0);

@@ -74,6 +74,7 @@ static Expr *factor(Parser *p);
 static Expr *unary(Parser *p);
 static Expr *call(Parser *p);
 static Expr *primary(Parser *p);
+static Expr *array_literal(Parser *p);
 
 /* expression -> assignment  (l'assegnamento e' l'operazione piu' debole) */
 static Expr *expression(Parser *p) {
@@ -101,6 +102,16 @@ static Expr *assignment(Parser *p) {
             Expr *node = ast_assign(name, (int)strlen(name), value);
             ast_free(left);               /* non serve piu' il nodo variabile */
             return node;
+        }
+
+        /* arr[i] = value : il bersaglio e' un'indicizzazione. Riusiamo i suoi
+         * due figli (array e indice) e liberiamo solo il "guscio" EXPR_INDEX
+         * con free() diretta (NON ast_free, che libererebbe anche i figli). */
+        if (left->type == EXPR_INDEX) {
+            Expr *arr = left->as.index.array;
+            Expr *idx = left->as.index.index;
+            free(left);
+            return ast_index_set(arr, idx, value);
         }
 
         error_at(p, p->previous, "Bersaglio di assegnamento non valido.");
@@ -214,12 +225,45 @@ static Expr *finish_call(Parser *p, Expr *callee) {
     return ast_call(callee, args, count);
 }
 
-/* call -> primary ( "(" argomenti? ")" )*
- * Una cosa "atomica" (primary) seguita da zero o piu' chiamate. */
+/* Legge un literal di array dopo '[' e costruisce il nodo EXPR_ARRAY.
+ * La '[' e' gia' stata consumata. Stessa meccanica di finish_call, ma con
+ * le parentesi quadre e senza un "callee" davanti. */
+static Expr *array_literal(Parser *p) {
+    Expr **elements = NULL;
+    int count = 0;
+    int cap = 0;
+    if (!check(p, TOKEN_RBRACKET)) {   /* array non vuoto */
+        do {
+            if (count == cap) {
+                if (cap < 4) cap = 4;
+                else         cap = cap * 2;
+                Expr **grown = realloc(elements, sizeof(Expr *) * (size_t)cap);
+                if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                elements = grown;
+            }
+            elements[count++] = expression(p);
+        } while (match(p, TOKEN_COMMA));
+    }
+    consume(p, TOKEN_RBRACKET, "Mi aspettavo ']' per chiudere l'array.");
+    return ast_array(elements, count);
+}
+
+/* call -> primary ( "(" argomenti? ")" | "[" expression "]" )*
+ * Una cosa "atomica" (primary) seguita da zero o piu' POSTFISSI: chiamate
+ * f(...) e indicizzazioni arr[i]. Sono allo stesso livello e si concatenano
+ * da sinistra, cosi' funzionano cose come  matrice[i][j]  oppure  f()[0]. */
 static Expr *call(Parser *p) {
     Expr *e = primary(p);
-    while (match(p, TOKEN_LPAREN)) {
-        e = finish_call(p, e);
+    for (;;) {
+        if (match(p, TOKEN_LPAREN)) {
+            e = finish_call(p, e);
+        } else if (match(p, TOKEN_LBRACKET)) {
+            Expr *index = expression(p);
+            consume(p, TOKEN_RBRACKET, "Mi aspettavo ']' dopo l'indice.");
+            e = ast_index(e, index);
+        } else {
+            break;
+        }
     }
     return e;
 }
@@ -254,7 +298,12 @@ static Expr *primary(Parser *p) {
         return inner;
     }
 
-    error_at(p, p->current, "Mi aspettavo un numero, un nome o una '('.");
+    /* Un '[' apre un literal di array: [1, 2, 3]  (anche vuoto: []). */
+    if (match(p, TOKEN_LBRACKET)) {
+        return array_literal(p);
+    }
+
+    error_at(p, p->current, "Mi aspettavo un numero, un nome, una '(' o un '['.");
     advance(p);
     return ast_number(0);
 }

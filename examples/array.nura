@@ -1,0 +1,45 @@
+// Array in Nura
+// Eseguilo con:  ./nura examples/array.nura
+
+// Un array e' una lista di valori tra parentesi quadre.
+var numeri = [10, 20, 30, 40];
+print numeri;              // [10, 20, 30, 40]
+
+// Accesso per indice: si parte da 0.
+print numeri[0];           // 10
+print numeri[3];           // 40
+
+// Scrittura per indice.
+numeri[1] = 99;
+print numeri;              // [10, 99, 30, 40]
+
+// Gli elementi possono essere di tipi diversi, anche altri array.
+var misto = [1, "ciao", true, [7, 8]];
+print misto;               // [1, "ciao", true, [7, 8]]
+print misto[3][0];         // 7
+
+// Scorrere un array con un while (per ora la lunghezza la sappiamo noi).
+var somma = 0;
+var i = 0;
+while (i < 4) {
+    somma = somma + numeri[i];
+    i = i + 1;
+}
+print somma;               // 179   (10 + 99 + 30 + 40)
+
+// I VALORI DI TIPO ARRAY SONO PASSATI PER RIFERIMENTO.
+// b non e' una copia di a: e' lo STESSO array.
+var a = [1, 2, 3];
+var b = a;
+b[0] = 100;
+print a;                   // [100, 2, 3]  <- modificato anche a!
+
+// Un array puo' essere restituito da una funzione (utile per "ritornare
+// piu' valori" in una volta sola).
+fun intervallo(inizio, fine) {
+    var risultato = [];         // parto da un array vuoto...
+    // NB: senza una len()/push() nativa (prossima feature) riempio a mano.
+    // Qui mostro solo la creazione + il ritorno.
+    return [inizio, fine];
+}
+print intervallo(1, 5);    // [1, 5]

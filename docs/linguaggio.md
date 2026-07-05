@@ -70,7 +70,7 @@ print x;         // stampa
 
 ## 4. Tipi di valore
 
-Nura ha quattro tipi di valore.
+Nura ha cinque tipi di valore.
 
 ### Numeri
 Interi o decimali; internamente sono tutti numeri in virgola mobile.
@@ -97,6 +97,49 @@ print "Hello, " + "world!";   // Hello, world!
 ### Funzioni
 Anche le funzioni sono valori: puoi metterle in una variabile e restituirle
 (vedi [Funzioni](#10-funzioni) e [Closures](#11-closures)).
+
+### Array
+Una lista ordinata di valori, racchiusa tra parentesi quadre. Gli elementi
+possono essere di **tipi diversi** e anche altri array (annidati).
+```
+var a = [1, 2, 3];
+print a;                 // [1, 2, 3]
+print [1, "ciao", true]; // [1, "ciao", true]
+print [];                // []  (array vuoto)
+```
+
+**Accesso per indice** con `arr[i]`. Gli indici partono da `0`:
+```
+var a = [10, 20, 30];
+print a[0];              // 10
+print a[2];              // 30
+a[1] = 99;               // scrittura: ora a è [10, 99, 30]
+print a[1] + a[2];       // 129
+```
+
+Un indice **fuori dai limiti** (negativo o ≥ lunghezza) è un errore a runtime,
+non un crash:
+```
+var a = [1, 2];
+print a[5];              // Errore a runtime: indice 5 fuori dai limiti...
+```
+
+**Per riferimento** — questa è la parte importante. Assegnare un array a
+un'altra variabile (o passarlo a una funzione) **non lo copia**: le due
+variabili condividono lo *stesso* array. Modificarlo da una si vede dall'altra.
+```
+var a = [1, 2, 3];
+var b = a;               // a e b sono lo STESSO array
+b[0] = 99;
+print a;                 // [99, 2, 3]  <- cambiato anche a!
+```
+Di conseguenza `==` fra array confronta l'**identità** (sono lo stesso array?),
+non il contenuto:
+```
+var a = [1, 2];
+print a == a;            // true
+print [1, 2] == [1, 2];  // false  (stesso contenuto, ma array diversi)
+```
 
 ## 5. Variabili
 
@@ -165,7 +208,7 @@ Cambiano l'ordine di valutazione: `(1 + 2) * 3` fa `9`.
 
 | Livello | Operatori |
 |---|---|
-| più forte | `()` chiamata di funzione |
+| più forte | `()` chiamata di funzione, `[]` indice di array |
 | | `-` `!` (unari) |
 | | `*` `/` `%` |
 | | `+` `-` |
@@ -180,7 +223,7 @@ Cambiano l'ordine di valutazione: `(1 + 2) * 3` fa `9`.
 `if`, `while`, `!`, `&&`, `||` decidono in base alla "verità" di un valore:
 
 - `false` e il numero `0` sono **falsi**;
-- **tutto il resto** è vero (qualsiasi altro numero, qualsiasi stringa, qualsiasi funzione).
+- **tutto il resto** è vero (qualsiasi altro numero, qualsiasi stringa, qualsiasi funzione, qualsiasi array — anche vuoto).
 
 ```
 if (0)    print "no";      // non stampa
@@ -319,7 +362,7 @@ blocco      -> "{" istruzione* "}"
 exprStmt    -> espressione ";"
 
 espressione -> assegnamento
-assegnamento-> IDENT "=" assegnamento | logic_or
+assegnamento-> ( IDENT | chiamata "[" espressione "]" ) "=" assegnamento | logic_or
 logic_or    -> logic_and ( "||" logic_and )*
 logic_and   -> uguaglianza ( "&&" uguaglianza )*
 uguaglianza -> confronto ( ( "==" | "!=" ) confronto )*
@@ -327,9 +370,10 @@ confronto   -> somma ( ( "<" | "<=" | ">" | ">=" ) somma )*
 somma       -> prodotto ( ( "+" | "-" ) prodotto )*
 prodotto    -> unario ( ( "*" | "/" | "%" ) unario )*
 unario      -> ( "-" | "!" ) unario | chiamata
-chiamata    -> primario ( "(" argomenti? ")" )*
+chiamata    -> primario ( "(" argomenti? ")" | "[" espressione "]" )*
 argomenti   -> espressione ( "," espressione )*
-primario    -> NUMERO | STRINGA | "true" | "false" | IDENT | "(" espressione ")"
+array       -> "[" ( espressione ( "," espressione )* )? "]"
+primario    -> NUMERO | STRINGA | "true" | "false" | IDENT | "(" espressione ")" | array
 ```
 
 ---

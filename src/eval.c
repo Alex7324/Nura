@@ -27,6 +27,13 @@ typedef struct {
     char **strings;
     int str_count;
     int str_cap;
+    /* arena degli array creati a runtime: come quella delle stringhe, li
+     * teniamo tutti qui e li liberiamo in blocco a fine programma. Serve
+     * perche' un array e' condiviso (per riferimento) e nessuna variabile lo
+     * "possiede": senza questa lista sarebbe un leak vero e proprio. */
+    Array **arrays;
+    int arr_count;
+    int arr_cap;
 } Interp;
 
 /* evaluate chiama execute (per le chiamate di funzione) e viceversa:
@@ -52,6 +59,51 @@ static char *intern(Interp *it, char *s) {
     }
     it->strings[it->str_count++] = s;
     return s;
+}
+
+/* Registra un array creato a runtime, per liberarlo a fine programma. */
+static Array *intern_array(Interp *it, Array *arr) {
+    if (it->arr_count == it->arr_cap) {
+        int new_cap;
+        if (it->arr_cap < 8) new_cap = 8;
+        else                 new_cap = it->arr_cap * 2;
+        Array **grown = realloc(it->arrays, sizeof(Array *) * (size_t)new_cap);
+        if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+        it->arrays = grown;
+        it->arr_cap = new_cap;
+    }
+    it->arrays[it->arr_count++] = arr;
+    return arr;
+}
+
+/* Valida un accesso arr[i]: controlla che arr_v sia un array, che idx_v sia
+ * un numero e che l'indice sia dentro i limiti. Se tutto ok, scrive l'indice
+ * intero in *out e ritorna 1; altrimenti segnala l'errore e ritorna 0. */
+static int check_index(Interp *it, Value arr_v, Value idx_v, int *out) {
+    char msg[160];
+    if (arr_v.type != VAL_ARRAY) {
+        snprintf(msg, sizeof(msg), "si puo' indicizzare solo un array, non un %s.",
+                 value_type_name(arr_v.type));
+        runtime_error(it, msg);
+        return 0;
+    }
+    if (idx_v.type != VAL_NUMBER) {
+        snprintf(msg, sizeof(msg), "l'indice di un array deve essere un numero, non un %s.",
+                 value_type_name(idx_v.type));
+        runtime_error(it, msg);
+        return 0;
+    }
+    int index = (int)idx_v.as.number;   /* tronca verso lo zero: arr[1.9] -> arr[1] */
+    Array *arr = arr_v.as.array;
+    if (index < 0 || index >= arr->count) {
+        snprintf(msg, sizeof(msg),
+                 "indice %d fuori dai limiti: l'array ha %d element%s.",
+                 index, arr->count, arr->count == 1 ? "o" : "i");
+        runtime_error(it, msg);
+        return 0;
+    }
+    *out = index;
+    return 1;
 }
 
 /* Verifica che un valore sia un numero; altrimenti segnala errore. */
@@ -250,6 +302,47 @@ static Value evaluate(Expr *expr, Interp *it) {
             }
             return result;
         }
+
+        case EXPR_ARRAY: {
+            /* Creiamo un nuovo array sull'heap (registrato nell'arena) e ci
+             * mettiamo dentro, uno per uno, i valori degli elementi. */
+            Array *arr = array_new();
+            intern_array(it, arr);
+            for (int i = 0; i < expr->as.array.count; i++) {
+                Value elem = evaluate(expr->as.array.elements[i], it);
+                if (it->had_error) return value_number(0);
+                array_push(arr, elem);
+            }
+            return value_array(arr);
+        }
+
+        case EXPR_INDEX: {
+            Value arr_v = evaluate(expr->as.index.array, it);
+            if (it->had_error) return arr_v;
+            Value idx_v = evaluate(expr->as.index.index, it);
+            if (it->had_error) return idx_v;
+
+            int index;
+            if (!check_index(it, arr_v, idx_v, &index)) return value_number(0);
+            return arr_v.as.array->items[index];
+        }
+
+        case EXPR_INDEX_SET: {
+            Value arr_v = evaluate(expr->as.index_set.array, it);
+            if (it->had_error) return arr_v;
+            Value idx_v = evaluate(expr->as.index_set.index, it);
+            if (it->had_error) return idx_v;
+            Value val = evaluate(expr->as.index_set.value, it);
+            if (it->had_error) return val;
+
+            int index;
+            if (!check_index(it, arr_v, idx_v, &index)) return value_number(0);
+            /* L'array e' condiviso: scrivere qui si vede da tutte le variabili
+             * che puntano allo stesso array. Non liberiamo il vecchio elemento:
+             * eventuali stringhe vivono altrove (AST/arena), non nell'array. */
+            arr_v.as.array->items[index] = val;
+            return val;   /* un assegnamento "vale" il valore assegnato */
+        }
     }
     return value_number(0);
 }
@@ -357,6 +450,9 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.strings = NULL;
     it.str_count = 0;
     it.str_cap = 0;
+    it.arrays = NULL;
+    it.arr_count = 0;
+    it.arr_cap = 0;
 
     for (int i = 0; i < program->count; i++) {
         execute(program->statements[i], &it);
@@ -366,6 +462,11 @@ void run_program(Program *program, Env *env, int *had_error) {
     /* Libera le stringhe create a runtime (le concatenazioni). */
     for (int i = 0; i < it.str_count; i++) free(it.strings[i]);
     free(it.strings);
+
+    /* Libera gli array creati a runtime (buffer + struttura). Farlo solo ORA,
+     * a esecuzione finita, e' sicuro: nessuno li usa piu'. */
+    for (int i = 0; i < it.arr_count; i++) array_free(it.arrays[i]);
+    free(it.arrays);
 
     *had_error = it.had_error;
 }

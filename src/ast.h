@@ -16,7 +16,10 @@ typedef enum {
     EXPR_LOGICAL,    /* a && b  ,  a || b   (con corto circuito)  */
     EXPR_VARIABLE,   /* lettura di una variabile:   n            */
     EXPR_ASSIGN,     /* assegnamento:               n = <expr>   */
-    EXPR_CALL        /* chiamata di funzione:       f(a, b)      */
+    EXPR_CALL,       /* chiamata di funzione:       f(a, b)      */
+    EXPR_ARRAY,      /* literal di array:           [a, b, c]    */
+    EXPR_INDEX,      /* lettura per indice:         arr[i]       */
+    EXPR_INDEX_SET   /* scrittura per indice:       arr[i] = v   */
 } ExprType;
 
 typedef struct Expr Expr;
@@ -33,6 +36,9 @@ struct Expr {
         struct { char *name; } variable;
         struct { char *name; Expr *value; } assign;
         struct { Expr *callee; Expr **args; int arg_count; } call;  /* f(a, b) */
+        struct { Expr **elements; int count; } array;              /* [a, b, c] */
+        struct { Expr *array; Expr *index; } index;                /* arr[i]    */
+        struct { Expr *array; Expr *index; Expr *value; } index_set; /* arr[i] = v */
     } as;
 };
 
@@ -45,6 +51,9 @@ Expr *ast_logical(TokenType op, Expr *left, Expr *right);
 Expr *ast_variable(const char *name, int length);
 Expr *ast_assign(const char *name, int length, Expr *value);
 Expr *ast_call(Expr *callee, Expr **args, int arg_count);
+Expr *ast_array(Expr **elements, int count);
+Expr *ast_index(Expr *array, Expr *index);
+Expr *ast_index_set(Expr *array, Expr *index, Expr *value);
 void ast_free(Expr *expr);
 void ast_print_compact(Expr *expr);
 void ast_print_tree(Expr *expr);

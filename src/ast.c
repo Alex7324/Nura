@@ -92,6 +92,28 @@ Expr *ast_call(Expr *callee, Expr **args, int arg_count) {
     return e;
 }
 
+Expr *ast_array(Expr **elements, int count) {
+    Expr *e = new_expr(EXPR_ARRAY);
+    e->as.array.elements = elements;   /* prende possesso dell'array di elementi */
+    e->as.array.count = count;
+    return e;
+}
+
+Expr *ast_index(Expr *array, Expr *index) {
+    Expr *e = new_expr(EXPR_INDEX);
+    e->as.index.array = array;
+    e->as.index.index = index;
+    return e;
+}
+
+Expr *ast_index_set(Expr *array, Expr *index, Expr *value) {
+    Expr *e = new_expr(EXPR_INDEX_SET);
+    e->as.index_set.array = array;
+    e->as.index_set.index = index;
+    e->as.index_set.value = value;
+    return e;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Liberazione (post-order)                                          */
 /* ------------------------------------------------------------------ */
@@ -130,6 +152,21 @@ void ast_free(Expr *expr) {
                 ast_free(expr->as.call.args[i]);
             }
             free(expr->as.call.args);
+            break;
+        case EXPR_ARRAY:
+            for (int i = 0; i < expr->as.array.count; i++) {
+                ast_free(expr->as.array.elements[i]);
+            }
+            free(expr->as.array.elements);
+            break;
+        case EXPR_INDEX:
+            ast_free(expr->as.index.array);
+            ast_free(expr->as.index.index);
+            break;
+        case EXPR_INDEX_SET:
+            ast_free(expr->as.index_set.array);
+            ast_free(expr->as.index_set.index);
+            ast_free(expr->as.index_set.value);
             break;
     }
     free(expr);
@@ -207,6 +244,30 @@ void ast_print_compact(Expr *expr) {
             }
             printf(")");
             break;
+        case EXPR_ARRAY:
+            printf("(array");
+            for (int i = 0; i < expr->as.array.count; i++) {
+                printf(" ");
+                ast_print_compact(expr->as.array.elements[i]);
+            }
+            printf(")");
+            break;
+        case EXPR_INDEX:
+            printf("(index ");
+            ast_print_compact(expr->as.index.array);
+            printf(" ");
+            ast_print_compact(expr->as.index.index);
+            printf(")");
+            break;
+        case EXPR_INDEX_SET:
+            printf("(index-set ");
+            ast_print_compact(expr->as.index_set.array);
+            printf(" ");
+            ast_print_compact(expr->as.index_set.index);
+            printf(" ");
+            ast_print_compact(expr->as.index_set.value);
+            printf(")");
+            break;
     }
 }
 
@@ -224,6 +285,9 @@ static void node_label(Expr *expr, char *buf, size_t n) {
         case EXPR_VARIABLE: snprintf(buf, n, "%s", expr->as.variable.name); break;
         case EXPR_ASSIGN:   snprintf(buf, n, "(= %s)", expr->as.assign.name); break;
         case EXPR_CALL:     snprintf(buf, n, "(call)"); break;
+        case EXPR_ARRAY:    snprintf(buf, n, "(array)"); break;
+        case EXPR_INDEX:    snprintf(buf, n, "(index)"); break;
+        case EXPR_INDEX_SET:snprintf(buf, n, "(index-set)"); break;
     }
 }
 
@@ -266,6 +330,18 @@ static void print_tree(Expr *expr, const char *prefix, int is_last, int is_root)
         for (int i = 0; i < expr->as.call.arg_count; i++) {
             print_tree(expr->as.call.args[i], child_prefix, i == last - 1, 0);
         }
+    } else if (expr->type == EXPR_ARRAY) {
+        int count = expr->as.array.count;
+        for (int i = 0; i < count; i++) {
+            print_tree(expr->as.array.elements[i], child_prefix, i == count - 1, 0);
+        }
+    } else if (expr->type == EXPR_INDEX) {
+        print_tree(expr->as.index.array, child_prefix, 0, 0);
+        print_tree(expr->as.index.index, child_prefix, 1, 0);
+    } else if (expr->type == EXPR_INDEX_SET) {
+        print_tree(expr->as.index_set.array, child_prefix, 0, 0);
+        print_tree(expr->as.index_set.index, child_prefix, 0, 0);
+        print_tree(expr->as.index_set.value, child_prefix, 1, 0);
     }
     /* EXPR_NUMBER e EXPR_VARIABLE sono foglie: nessun figlio */
 }
