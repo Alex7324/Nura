@@ -26,8 +26,15 @@
 
 static Obj   *g_objects = NULL;   /* lista di tutti gli oggetti gestiti     */
 static size_t g_bytes    = 0;     /* stima dei byte vivi (per la soglia)    */
+static size_t g_count    = 0;     /* quanti oggetti vivi (per il log)       */
 static size_t g_next_gc  = (size_t)1 << 20;   /* soglia: prima raccolta a ~1 MB */
 static void (*g_mark_roots)(void) = NULL;     /* callback che marca le radici   */
+
+/* Interruttori di diagnostica, letti dall'ambiente in gc_init():
+ *   NURA_GC_LOG=1     -> stampa una riga a ogni raccolta
+ *   NURA_GC_STRESS=1  -> raccoglie a OGNI confine sicuro (per stanare bug) */
+static int g_log = 0;
+static int g_stress = 0;
 
 /* La "gray stack": oggetti marcati ma di cui non abbiamo ancora marcato i figli. */
 static Obj **g_gray = NULL;
@@ -47,8 +54,11 @@ static size_t obj_size(Obj *o) {
 void gc_init(void) {
     g_objects = NULL;
     g_bytes = 0;
+    g_count = 0;
     g_next_gc = (size_t)1 << 20;
     g_gray_count = 0;
+    g_log = (getenv("NURA_GC_LOG") != NULL);
+    g_stress = (getenv("NURA_GC_STRESS") != NULL);
 }
 
 void gc_set_mark_roots(void (*fn)(void)) {
@@ -73,6 +83,7 @@ static void *alloc_object(size_t size, ObjType type) {
     o->next = g_objects;
     g_objects = o;
     g_bytes += size;
+    g_count++;
     return o;
 }
 
@@ -145,6 +156,7 @@ static void blacken(Obj *o) {
 
 static void free_object(Obj *o) {
     g_bytes -= obj_size(o);
+    g_count--;
     switch (o->type) {
         case OBJ_ARRAY: array_free((Array *)o);        break;
         case OBJ_ENV:   env_free((Env *)o); free(o);   break;
@@ -170,6 +182,9 @@ static void sweep(void) {
 /* ------------------------------------------------------------------ */
 
 static void gc_collect(void) {
+    size_t before_count = g_count;
+    size_t before_bytes = g_bytes;
+
     /* 1. MARK: parti dalle radici, poi svuota la gray stack. */
     g_gray_count = 0;
     if (g_mark_roots) g_mark_roots();
@@ -185,12 +200,19 @@ static void gc_collect(void) {
      * raddoppia (con un minimo). Cosi' il GC si auto-regola. */
     g_next_gc = g_bytes * 2;
     if (g_next_gc < ((size_t)1 << 20)) g_next_gc = (size_t)1 << 20;
+
+    if (g_log) {
+        fprintf(stderr,
+            "[GC] liberati %zu oggetti (%zu -> %zu vivi) | %zu -> %zu byte | prossima soglia %zu\n",
+            before_count - g_count, before_count, g_count,
+            before_bytes, g_bytes, g_next_gc);
+    }
 }
 
-/* Chiamata da eval.c ai confini sicuri: raccoglie solo se siamo oltre soglia
- * e sappiamo trovare le radici. */
+/* Chiamata da eval.c ai confini sicuri: raccoglie se siamo oltre soglia (o
+ * sempre, in modalita' stress) e sappiamo trovare le radici. */
 void gc_maybe_collect(void) {
-    if (g_mark_roots != NULL && g_bytes > g_next_gc) {
+    if (g_mark_roots != NULL && (g_stress || g_bytes > g_next_gc)) {
         gc_collect();
     }
 }
