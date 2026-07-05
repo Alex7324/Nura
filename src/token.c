@@ -20,6 +20,8 @@ const char *token_type_name(TokenType type) {
         case TOKEN_ELSE:       return "ELSE";
         case TOKEN_WHILE:      return "WHILE";
         case TOKEN_FOR:        return "FOR";
+        case TOKEN_BREAK:      return "BREAK";
+        case TOKEN_CONTINUE:   return "CONTINUE";
         case TOKEN_RETURN:     return "RETURN";
         case TOKEN_PRINT:      return "PRINT";
         case TOKEN_TRUE:       return "TRUE";

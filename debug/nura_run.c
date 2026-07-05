@@ -62,6 +62,8 @@ static void ind(void) { printf("      "); for (int i = 0; i < depth; i++) printf
 static Env *globals;
 static int returning;
 static Value ret_val;
+static int breaking;    /* break in transito verso il ciclo    */
+static int continuing;  /* continue in transito verso il ciclo */
 
 static void n_execute(Stmt *s, Env *env, int n);   /* dichiarazione anticipata */
 
@@ -294,7 +296,7 @@ static void n_execute(Stmt *s, Env *env, int n) {
             Program *body = &s->as.block.body;
             for (int i = 0; i < body->count; i++) {
                 n_execute(body->statements[i], block_env, i + 1);
-                if (returning) break;
+                if (returning || breaking || continuing) break;
             }
             break;
         }
@@ -322,9 +324,45 @@ static void n_execute(Stmt *s, Env *env, int n) {
                 printf("      --- giro %d (condizione vera) ---\n", giro);
                 n_execute(s->as.while_stmt.body, env, n);
                 if (returning) break;
+                if (breaking)   { breaking = 0;   printf("      break -> esco dal ciclo\n"); break; }
+                if (continuing) { continuing = 0; printf("      continue -> prossimo giro\n"); }
             }
             break;
         }
+
+        case STMT_FOR: {
+            printf("\n> istruzione %d:  for (...)  (nuovo scope per la variabile)\n", n);
+            Env *loop_env = malloc(sizeof(Env));   /* leak ok per il tool */
+            env_init(loop_env);
+            loop_env->enclosing = env;
+            if (s->as.for_stmt.initializer != NULL)
+                n_execute(s->as.for_stmt.initializer, loop_env, n);
+            int giro = 0;
+            for (;;) {
+                if (s->as.for_stmt.condition != NULL) {
+                    Value cond = n_eval(s->as.for_stmt.condition, loop_env);
+                    if (!value_is_truthy(cond)) { printf("      condizione FALSA  ->  esco dal for\n"); break; }
+                }
+                giro++;
+                printf("      --- giro %d ---\n", giro);
+                n_execute(s->as.for_stmt.body, loop_env, n);
+                if (returning) break;
+                if (breaking) { breaking = 0; printf("      break -> esco dal for\n"); break; }
+                if (continuing) { continuing = 0; printf("      continue -> vado all'incremento\n"); }
+                if (s->as.for_stmt.increment != NULL) n_eval(s->as.for_stmt.increment, loop_env);
+            }
+            break;
+        }
+
+        case STMT_BREAK:
+            printf("\n> istruzione %d:  break;  (segnale: esci dal ciclo)\n", n);
+            breaking = 1;
+            break;
+
+        case STMT_CONTINUE:
+            printf("\n> istruzione %d:  continue;  (segnale: prossimo giro)\n", n);
+            continuing = 1;
+            break;
 
         case STMT_FUN: {
             printf("\n> istruzione %d:  fun %s(...)  (definizione)\n", n, s->as.function.name);

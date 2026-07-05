@@ -285,18 +285,28 @@ for (var i = 0; i < 5; i = i + 1) {
 - Tutte e tre le clausole sono **facoltative**: `for (;;) { ... }` è un ciclo
   infinito, `for (; i < n;)` usa solo la condizione, ecc.
 
-Comodo per scorrere un array:
+Comodo per scorrere un array (con `len`, vedi sotto):
 ```
 var a = [10, 20, 30];
-for (var i = 0; i < 3; i = i + 1) {
+for (var i = 0; i < len(a); i = i + 1) {
     print a[i];
 }
 ```
 
-> Sotto il cofano il `for` non è un costrutto a sé: è **zucchero sintattico**.
-> Il parser lo traduce in un blocco con un `while` dentro —
-> `for (init; cond; incr) corpo` diventa `{ init; while (cond) { corpo; incr; } }`.
-> (Puoi vederlo con lo strumento di debug `nura_run`.)
+### break e continue
+Dentro un ciclo (`while` o `for`):
+- **`break`** esce subito dal ciclo;
+- **`continue`** salta al giro successivo. In un `for`, `continue` esegue comunque
+  l'**incremento** prima di ricominciare.
+
+```
+for (var i = 0; i < 10; i = i + 1) {
+    if (i == 5) break;        // si ferma: stampa 0 1 2 3 4
+    if (i % 2 == 0) continue; // salta i pari
+    print i;                  // stampa 1 3 (poi break a 5)
+}
+```
+Usare `break` o `continue` **fuori** da un ciclo è un errore di sintassi.
 
 ## 10. Funzioni
 
@@ -404,7 +414,9 @@ Grammatica di Nura in forma sintetica (`*` = zero o più, `?` = facoltativo).
 ```
 programma   -> istruzione* EOF
 
-istruzione  -> varDecl | funDecl | print | if | while | for | return | blocco | exprStmt
+istruzione  -> varDecl | funDecl | print | if | while | for | break | continue | return | blocco | exprStmt
+break       -> "break" ";"
+continue    -> "continue" ";"
 varDecl     -> "var" IDENT "=" espressione ";"
 funDecl     -> "fun" IDENT "(" parametri? ")" blocco
 parametri   -> IDENT ( "," IDENT )*

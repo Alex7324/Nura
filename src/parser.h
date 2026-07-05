@@ -13,6 +13,9 @@ typedef struct {
                        * contro lo stack overflow su annidamenti profondi
                        * ([[[...]]], (((...))) e catene lunghe (1+1+...+1).
                        * Azzerato a ogni istruzione. Vedi MAX_PARSE_DEPTH. */
+    int loop_depth;   /* quanti cicli racchiudono il punto corrente: serve a
+                       * rilevare 'break'/'continue' fuori da un ciclo. Viene
+                       * azzerato entrando nel corpo di una funzione. */
 } Parser;
 
 /* (Fasi 1-3) Analizza UNA espressione e ne ritorna l'albero.

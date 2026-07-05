@@ -161,6 +161,28 @@ check "for annidati"         "for (var r=0; r<2; r=r+1) for (var c=0; c<2; c=c+1
 10
 11"
 
+echo "== Fase 11: break e continue =="
+check "break nel for"        "for(var i=0;i<10;i=i+1){ if(i==3) break; print i; }" "0
+1
+2"
+check "continue nel for"     "for(var i=0;i<5;i=i+1){ if(i==2) continue; print i; }" "0
+1
+3
+4"
+check "break nel while"      "var i=0; while(true){ if(i==3) break; print i; i=i+1; }" "0
+1
+2"
+check "continue nel while"   "var i=0; while(i<5){ i=i+1; if(i==3) continue; print i; }" "1
+2
+4
+5"
+check "for annidati + break interno" "for(var r=0;r<3;r=r+1){ for(var c=0;c<3;c=c+1){ if(c==1) break; print r*10+c; } }" "0
+10
+20"
+check "break fuori da ciclo"  "break;"    "[riga 1] Errore di sintassi vicino a 'break': 'break' fuori da un ciclo."
+check "continue fuori da ciclo" "continue;" "[riga 1] Errore di sintassi vicino a 'continue': 'continue' fuori da un ciclo."
+check "break non attraversa funzione" "fun f(){ break; } print 1;" "[riga 1] Errore di sintassi vicino a 'break': 'break' fuori da un ciclo."
+
 echo "== Garbage collector (Fase 9) =="
 # Cicli lunghi che creano tanta spazzatura: il GC la raccoglie, il risultato
 # resta corretto e non si esaurisce la memoria (prima crashava con 'Memoria esaurita').

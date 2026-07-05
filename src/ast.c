@@ -401,6 +401,18 @@ Stmt *stmt_while(Expr *condition, Stmt *body) {
     return s;
 }
 
+Stmt *stmt_for(Stmt *initializer, Expr *condition, Expr *increment, Stmt *body) {
+    Stmt *s = new_stmt(STMT_FOR);
+    s->as.for_stmt.initializer = initializer;   /* tutte e tre possono essere NULL */
+    s->as.for_stmt.condition = condition;
+    s->as.for_stmt.increment = increment;
+    s->as.for_stmt.body = body;
+    return s;
+}
+
+Stmt *stmt_break(void)    { return new_stmt(STMT_BREAK); }
+Stmt *stmt_continue(void) { return new_stmt(STMT_CONTINUE); }
+
 Stmt *stmt_fun(const char *name, int name_length, char **params, int param_count, Stmt *body) {
     Stmt *s = new_stmt(STMT_FUN);
     s->as.function.name = copy_name(name, name_length);
@@ -441,6 +453,15 @@ void stmt_free(Stmt *stmt) {
             ast_free(stmt->as.while_stmt.condition);
             stmt_free(stmt->as.while_stmt.body);
             break;
+        case STMT_FOR:
+            stmt_free(stmt->as.for_stmt.initializer);   /* stmt_free gestisce NULL */
+            ast_free(stmt->as.for_stmt.condition);      /* ast_free gestisce NULL  */
+            ast_free(stmt->as.for_stmt.increment);
+            stmt_free(stmt->as.for_stmt.body);
+            break;
+        case STMT_BREAK:
+        case STMT_CONTINUE:
+            break;   /* nessun figlio da liberare */
         case STMT_FUN:
             free(stmt->as.function.name);
             for (int i = 0; i < stmt->as.function.param_count; i++) {

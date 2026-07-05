@@ -31,6 +31,8 @@ struct Interp {
     Env *globals;      /* scope globale (i corpi delle funzioni lo racchiudono) */
     int had_error;
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
+    int is_breaking;   /* 1 mentre un 'break' sta "risalendo" fino al ciclo       */
+    int is_continuing; /* 1 mentre un 'continue' sta "risalendo" fino al ciclo    */
     Value return_value;
     int depth;         /* profondita' di ricorsione di evaluate()/execute()     */
     /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
@@ -621,7 +623,11 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                  * E' qui che si recupera la spazzatura dei giri di un ciclo. */
                 gc_maybe_collect();
                 execute(body->statements[i], it);
-                if (it->had_error || it->is_returning) break;
+                /* Se e' scattato return/break/continue, smetto di eseguire il
+                 * blocco: il segnale "risale" fino a chi lo gestisce (la funzione
+                 * per return, il ciclo per break/continue). */
+                if (it->had_error || it->is_returning ||
+                    it->is_breaking || it->is_continuing) break;
             }
 
             it->env = saved;
@@ -650,9 +656,49 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                 if (!is_truthy(cond)) break;
                 execute(stmt->as.while_stmt.body, it);
                 if (it->had_error || it->is_returning) break;
+                if (it->is_breaking)   { it->is_breaking = 0; break; }
+                if (it->is_continuing) { it->is_continuing = 0; }  /* -> prossimo giro */
             }
             break;
         }
+
+        case STMT_FOR: {
+            /* Un nuovo scope per la variabile del for: cosi' non "esce" dal ciclo.
+             * (Il corpo, se e' un blocco, crea comunque il SUO scope a ogni giro.) */
+            Env *loop_env = gc_new_env();
+            loop_env->enclosing = it->env;
+            Env *saved = it->env;
+            it->env = loop_env;
+
+            if (stmt->as.for_stmt.initializer != NULL)
+                execute(stmt->as.for_stmt.initializer, it);
+
+            while (!it->had_error && !it->is_returning) {
+                gc_maybe_collect();
+                if (stmt->as.for_stmt.condition != NULL) {
+                    Value cond = evaluate(stmt->as.for_stmt.condition, it);
+                    if (it->had_error) break;
+                    if (!is_truthy(cond)) break;
+                }
+                execute(stmt->as.for_stmt.body, it);
+                if (it->had_error || it->is_returning) break;
+                if (it->is_breaking) { it->is_breaking = 0; break; }
+                if (it->is_continuing) it->is_continuing = 0;  /* NON esce: fa l'incremento */
+
+                /* L'incremento gira SEMPRE a fine giro, anche dopo un continue:
+                 * e' la differenza chiave rispetto alla vecchia traduzione in while. */
+                if (stmt->as.for_stmt.increment != NULL) {
+                    evaluate(stmt->as.for_stmt.increment, it);
+                    if (it->had_error) break;
+                }
+            }
+
+            it->env = saved;
+            break;
+        }
+
+        case STMT_BREAK:    it->is_breaking = 1;    break;
+        case STMT_CONTINUE: it->is_continuing = 1;  break;
 
         case STMT_FUN: {
             /* La funzione cattura l'ambiente corrente (it->env) come sua
@@ -685,6 +731,8 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.had_error = 0;
     it.is_returning = 0;
     it.return_value = value_number(0);
+    it.is_breaking = 0;
+    it.is_continuing = 0;
     it.depth = 0;
 
     /* Rendo disponibili le funzioni native (len, push, ...) nell'ambiente

@@ -379,6 +379,8 @@ static Stmt *block_statement(Parser *p);
 static Stmt *if_statement(Parser *p);
 static Stmt *while_statement(Parser *p);
 static Stmt *for_statement(Parser *p);
+static Stmt *break_statement(Parser *p);
+static Stmt *continue_statement(Parser *p);
 
 /* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt | forStmt |
  *              returnStmt | block | exprStmt */
@@ -393,6 +395,8 @@ static Stmt *statement(Parser *p) {
     if (match(p, TOKEN_IF))     return if_statement(p);
     if (match(p, TOKEN_WHILE))  return while_statement(p);
     if (match(p, TOKEN_FOR))    return for_statement(p);
+    if (match(p, TOKEN_BREAK))    return break_statement(p);
+    if (match(p, TOKEN_CONTINUE)) return continue_statement(p);
     if (match(p, TOKEN_RETURN)) return return_statement(p);
     if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
@@ -456,7 +460,9 @@ static Stmt *while_statement(Parser *p) {
     Expr *condition = expression(p);
     consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo la condizione del while.");
 
+    p->loop_depth++;   /* dentro il corpo, break/continue sono leciti */
     Stmt *body = statement(p);
+    p->loop_depth--;
     return stmt_while(condition, body);
 }
 
@@ -464,20 +470,10 @@ static Stmt *while_statement(Parser *p) {
  *                       expression? ";"
  *                       expression? ")" statement            ('for' gia' consumato)
  *
- * Il 'for' NON e' un nuovo tipo di nodo: e' "zucchero sintattico". Qui lo
- * traduciamo (desugaring) in costrutti che l'evaluator gia' conosce, cioe' un
- * blocco che contiene un while. Le tre clausole (iniz; cond; incr) diventano:
- *
- *     {
- *         iniz;
- *         while (cond) {
- *             corpo;
- *             incr;
- *         }
- *     }
- *
- * Cosi' l'evaluator resta invariato: al momento dell'esecuzione vedra' solo
- * blocchi e while. Ogni clausola e' facoltativa. */
+ * Il 'for' e' un costrutto a se' (STMT_FOR). All'inizio era zucchero sintattico
+ * tradotto in un while, ma questo rendeva scorretto il 'continue' (che deve
+ * saltare all'incremento): per gestirlo bene serve un vero nodo for. Ogni
+ * clausola (iniz; cond; incr) e' facoltativa. */
 static Stmt *for_statement(Parser *p) {
     consume(p, TOKEN_LPAREN, "Mi aspettavo '(' dopo 'for'.");
 
@@ -492,7 +488,7 @@ static Stmt *for_statement(Parser *p) {
         initializer = expression_statement(p); /* i = 0;           */
     }
 
-    /* 2) Condizione: se manca, il ciclo e' "sempre vero" (come while (true)). */
+    /* 2) Condizione: se manca, il ciclo e' "sempre vero". */
     Expr *condition = NULL;
     if (!check(p, TOKEN_SEMICOLON)) {
         condition = expression(p);
@@ -506,37 +502,28 @@ static Stmt *for_statement(Parser *p) {
     }
     consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo le clausole del for.");
 
-    /* 4) Corpo del ciclo. */
+    /* 4) Corpo del ciclo. Dentro il corpo, break/continue sono leciti. */
+    p->loop_depth++;
     Stmt *body = statement(p);
+    p->loop_depth--;
 
-    /* ---- DESUGARING: montiamo l'albero equivalente ---- */
+    return stmt_for(initializer, condition, increment, body);
+}
 
-    /* corpo = { corpo; incr; }   (l'incremento va DOPO il corpo, ogni giro) */
-    if (increment != NULL) {
-        Program inner;
-        program_init(&inner);
-        program_add(&inner, body);
-        program_add(&inner, stmt_expr(increment));
-        body = stmt_block(inner);
-    }
+/* breakStmt / continueStmt -> ("break" | "continue") ";"
+ * Ammessi solo dentro un ciclo (lo verifichiamo con loop_depth, gia' in parsing). */
+static Stmt *break_statement(Parser *p) {
+    if (p->loop_depth == 0)
+        error_at(p, p->previous, "'break' fuori da un ciclo.");
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo 'break'.");
+    return stmt_break();
+}
 
-    /* condizione assente => true costante */
-    if (condition == NULL) condition = ast_bool(1);
-
-    /* corpo = while (cond) corpo */
-    body = stmt_while(condition, body);
-
-    /* corpo = { iniz; while... }  (il blocco esterno da' all'init il suo scope,
-     * cosi' la variabile del for non "esce" dal ciclo) */
-    if (initializer != NULL) {
-        Program outer;
-        program_init(&outer);
-        program_add(&outer, initializer);
-        program_add(&outer, body);
-        body = stmt_block(outer);
-    }
-
-    return body;
+static Stmt *continue_statement(Parser *p) {
+    if (p->loop_depth == 0)
+        error_at(p, p->previous, "'continue' fuori da un ciclo.");
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo 'continue'.");
+    return stmt_continue();
 }
 
 /* funDecl -> "fun" IDENTIFIER "(" ( IDENTIFIER ( "," IDENTIFIER )* )? ")" block
@@ -566,7 +553,12 @@ static Stmt *fun_declaration(Parser *p) {
     consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo i parametri.");
     consume(p, TOKEN_LBRACE, "Mi aspettavo '{' per il corpo della funzione.");
 
+    /* Il corpo e' un "nuovo mondo" per break/continue: un ciclo esterno non li
+     * rende leciti qui dentro. Azzero e ripristino loop_depth. */
+    int saved_loop = p->loop_depth;
+    p->loop_depth = 0;
     Stmt *body = block_statement(p);   /* la '{' e' gia' stata consumata */
+    p->loop_depth = saved_loop;
     return stmt_fun(name.start, name.length, params, count, body);
 }
 
@@ -589,6 +581,7 @@ Expr *parse_expression_source(const char *source, int *had_error) {
     lexer_init(&parser.lexer, source);
     parser.had_error = 0;
     parser.depth = 0;
+    parser.loop_depth = 0;
     advance(&parser);
     Expr *tree = expression(&parser);
     consume(&parser, TOKEN_EOF, "Testo in piu' dopo l'espressione.");
@@ -602,6 +595,7 @@ void parse_program(const char *source, Program *program, int *had_error) {
     lexer_init(&parser.lexer, source);
     parser.had_error = 0;
     parser.depth = 0;
+    parser.loop_depth = 0;
     advance(&parser);            /* primer */
 
     program_init(program);

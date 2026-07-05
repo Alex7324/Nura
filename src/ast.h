@@ -86,6 +86,9 @@ typedef enum {
     STMT_BLOCK,   /* { istruzione* }                  */
     STMT_IF,      /* if (cond) ramo [else ramo]       */
     STMT_WHILE,   /* while (cond) corpo               */
+    STMT_FOR,     /* for (init; cond; incr) corpo     */
+    STMT_BREAK,   /* break;                           */
+    STMT_CONTINUE,/* continue;                        */
     STMT_FUN,     /* fun nome(params) { corpo }       */
     STMT_RETURN   /* return expr;                     */
 } StmtType;
@@ -99,6 +102,8 @@ struct Stmt {
         struct { Program body; } block;
         struct { Expr *condition; Stmt *then_branch; Stmt *else_branch; } if_stmt;
         struct { Expr *condition; Stmt *body; } while_stmt;
+        /* for: init, cond e incr possono essere NULL (clausole facoltative) */
+        struct { Stmt *initializer; Expr *condition; Expr *increment; Stmt *body; } for_stmt;
         struct { char *name; char **params; int param_count; Stmt *body; } function;
         struct { Expr *value; } ret;   /* return: value puo' essere NULL */
     } as;
@@ -108,6 +113,9 @@ Stmt *stmt_var(const char *name, int length, Expr *initializer);
 Stmt *stmt_print(Expr *expr);
 Stmt *stmt_expr(Expr *expr);
 Stmt *stmt_block(Program body);
+Stmt *stmt_for(Stmt *initializer, Expr *condition, Expr *increment, Stmt *body);
+Stmt *stmt_break(void);
+Stmt *stmt_continue(void);
 Stmt *stmt_if(Expr *condition, Stmt *then_branch, Stmt *else_branch);
 Stmt *stmt_while(Expr *condition, Stmt *body);
 Stmt *stmt_fun(const char *name, int name_length, char **params, int param_count, Stmt *body);
