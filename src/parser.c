@@ -72,9 +72,31 @@ static Expr *comparison(Parser *p);
 static Expr *term(Parser *p);
 static Expr *factor(Parser *p);
 static Expr *unary(Parser *p);
+static Expr *unary_inner(Parser *p);
 static Expr *call(Parser *p);
 static Expr *primary(Parser *p);
+static Expr *primary_inner(Parser *p);
 static Expr *array_literal(Parser *p);
+
+/* Guard-rail contro lo stack overflow del parser. La discesa ricorsiva usa lo
+ * stack del C: un input pensato apposta, come 5000 parentesi aperte o 5000 '['
+ * annidate, lo farebbe esplodere (crash secco). Oltre questo limite diamo un
+ * errore di sintassi controllato.
+ *
+ * NB: e' un contatore della PROFONDITA' della ricorsione, non esattamente dei
+ * livelli di annidamento visibili: alcuni costrutti (es. un '[' o una '(')
+ * attraversano sia unary() sia primary() e quindi "contano doppio". In pratica
+ * il limite corrisponde a qualche centinaio di livelli annidati: infinitamente
+ * piu' di qualunque codice reale, e ben sotto la soglia di crash. */
+#define MAX_PARSE_DEPTH 1000
+
+static int too_deep(Parser *p) {
+    if (p->depth >= MAX_PARSE_DEPTH) {
+        error_at(p, p->current, "espressione troppo annidata.");
+        return 1;
+    }
+    return 0;
+}
 
 /* expression -> assignment  (l'assegnamento e' l'operazione piu' debole) */
 static Expr *expression(Parser *p) {
@@ -193,7 +215,17 @@ static Expr *factor(Parser *p) {
     return left;
 }
 
+/* Wrapper con guard-rail: conta la profondita' e la limita. Il lavoro vero e'
+ * in unary_inner. Idem per primary/primary_inner piu' sotto. */
 static Expr *unary(Parser *p) {
+    if (too_deep(p)) return ast_number(0);
+    p->depth++;
+    Expr *e = unary_inner(p);
+    p->depth--;
+    return e;
+}
+
+static Expr *unary_inner(Parser *p) {
     if (check(p, TOKEN_MINUS) || check(p, TOKEN_BANG)) {
         TokenType op = p->current.type;
         advance(p);
@@ -268,8 +300,16 @@ static Expr *call(Parser *p) {
     return e;
 }
 
-/* primary -> NUMBER | IDENTIFIER | "(" expression ")" */
 static Expr *primary(Parser *p) {
+    if (too_deep(p)) return ast_number(0);
+    p->depth++;
+    Expr *e = primary_inner(p);
+    p->depth--;
+    return e;
+}
+
+/* primary -> NUMBER | IDENTIFIER | "(" expression ")" | array */
+static Expr *primary_inner(Parser *p) {
     if (check(p, TOKEN_NUMBER)) {
         double value = p->current.number;
         advance(p);
@@ -446,6 +486,7 @@ Expr *parse_expression_source(const char *source, int *had_error) {
     Parser parser;
     lexer_init(&parser.lexer, source);
     parser.had_error = 0;
+    parser.depth = 0;
     advance(&parser);
     Expr *tree = expression(&parser);
     consume(&parser, TOKEN_EOF, "Testo in piu' dopo l'espressione.");
@@ -458,6 +499,7 @@ void parse_program(const char *source, Program *program, int *had_error) {
     Parser parser;
     lexer_init(&parser.lexer, source);
     parser.had_error = 0;
+    parser.depth = 0;
     advance(&parser);            /* primer */
 
     program_init(program);

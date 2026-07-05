@@ -123,6 +123,18 @@ check "indice negativo"      "var a=[1,2]; print a[-1];"   "Errore a runtime: in
 check "indicizzo un numero"  "var n=3; print n[0];"        "Errore a runtime: si puo' indicizzare solo un array, non un numero."
 check "indice non numerico"  'var a=[1]; print a["x"];'    "Errore a runtime: l'indice di un array deve essere un numero, non un stringa."
 
+echo "== Fase 7b: robustezza array (casi limite / anti-crash) =="
+check "indice deve essere intero" "var a=[1,2,3]; print a[2.9];"  "Errore a runtime: l'indice di un array deve essere un numero intero, non 2.9."
+check "indice intero come 2.0 ok"  "var a=[1,2,3]; print a[2.0];" "3"
+check "indice enorme non e' UB"    "var a=[1]; print a[1000000000];" "Errore a runtime: indice 1000000000 fuori dai limiti: l'array ha 1 elemento."
+# Array ciclico (a contiene se stesso): la stampa NON deve andare in loop.
+# Attesi 100 '[' + '[...]' + 100 ']'  (MAX_PRINT_DEPTH = 100).
+CICLICO="$(printf '[%.0s' $(seq 1 100))[...]$(printf ']%.0s' $(seq 1 100))"
+check "array ciclico non crasha"   "var a=[1]; a[0]=a; print a;" "$CICLICO"
+# Annidamento sintattico eccessivo: errore controllato, niente stack overflow.
+TROPPI="$(printf '[%.0s' $(seq 1 1200))"
+check "annidamento eccessivo"      "print ${TROPPI}1;" "[riga 1] Errore di sintassi vicino a '[': espressione troppo annidata."
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

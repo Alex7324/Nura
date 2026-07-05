@@ -9,6 +9,9 @@ typedef struct {
     Token current;
     Token previous;
     int had_error;
+    int depth;        /* profondita' di annidamento delle espressioni:
+                       * guard-rail contro lo stack overflow su input come
+                       * [[[[...]]]] o (((...))) o ----...1 molto profondi */
 } Parser;
 
 /* (Fasi 1-3) Analizza UNA espressione e ne ritorna l'albero.

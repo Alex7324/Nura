@@ -93,16 +93,32 @@ static int check_index(Interp *it, Value arr_v, Value idx_v, int *out) {
         runtime_error(it, msg);
         return 0;
     }
-    int index = (int)idx_v.as.number;   /* tronca verso lo zero: arr[1.9] -> arr[1] */
-    Array *arr = arr_v.as.array;
-    if (index < 0 || index >= arr->count) {
+    /* L'indice deve essere un numero INTERO e finito. Rifiutiamo qui i decimali
+     * (arr[1.9]), i NaN e gli infiniti: floor/isfinite li intercettano. Cosi'
+     * evitiamo anche il cast a int di valori enormi (che sarebbe undefined
+     * behavior in C, e prima dava messaggi assurdi tipo "indice -2147483648"). */
+    double d = idx_v.as.number;
+    if (!isfinite(d) || d != floor(d)) {
         snprintf(msg, sizeof(msg),
-                 "indice %d fuori dai limiti: l'array ha %d element%s.",
-                 index, arr->count, arr->count == 1 ? "o" : "i");
+                 "l'indice di un array deve essere un numero intero, non %g.", d);
         runtime_error(it, msg);
         return 0;
     }
-    *out = index;
+    Array *arr = arr_v.as.array;
+    /* Controllo dei limiti fatto sul double (non ancora convertito): se d e'
+     * fuori da [0, count) segnaliamo l'errore usando %g, che stampa bene anche
+     * i numeri grandissimi. Dopo questo controllo sappiamo che 0 <= d < count
+     * <= INT_MAX, quindi il cast a int qui sotto e' sicuro. */
+    if (d < 0 || d >= arr->count) {
+        /* %.0f (non %g): d e' un intero, lo vogliamo per esteso (2147483648),
+         * non in notazione scientifica (2.14748e+09). */
+        snprintf(msg, sizeof(msg),
+                 "indice %.0f fuori dai limiti: l'array ha %d element%s.",
+                 d, arr->count, arr->count == 1 ? "o" : "i");
+        runtime_error(it, msg);
+        return 0;
+    }
+    *out = (int)d;
     return 1;
 }
 

@@ -129,15 +129,24 @@ int values_equal(Value a, Value b) {
     return 0;
 }
 
+/* Limite di profondita' per la stampa degli array annidati. Serve soprattutto
+ * come guard-rail contro gli array CICLICI: dato che gli array sono per
+ * riferimento, si puo' scrivere  a[0] = a  e creare un array che contiene se
+ * stesso. Senza questo limite, stamparlo ricorrerebbe all'infinito fino a far
+ * esplodere lo stack. Oltre il limite stampiamo "[...]" e ci fermiamo. */
+#define MAX_PRINT_DEPTH 100
+
+static void value_print_depth(Value v, int depth);
+
 /* Stampa un valore COME ELEMENTO di un array: le stringhe vengono racchiuse
  * tra virgolette, cosi' [1, "ciao"] non si confonde con [1, ciao]. Per gli
  * altri tipi si comporta come value_print. */
-static void print_element(Value v) {
+static void print_element(Value v, int depth) {
     if (v.type == VAL_STRING) printf("\"%s\"", v.as.string);
-    else                      value_print(v);
+    else                      value_print_depth(v, depth);
 }
 
-void value_print(Value v) {
+static void value_print_depth(Value v, int depth) {
     switch (v.type) {
         case VAL_NUMBER:
             printf("%g", v.as.number);
@@ -154,15 +163,23 @@ void value_print(Value v) {
             break;
         case VAL_ARRAY: {
             Array *arr = v.as.array;
+            if (depth >= MAX_PRINT_DEPTH) {   /* troppo annidato (o ciclico) */
+                printf("[...]");
+                break;
+            }
             printf("[");
             for (int i = 0; i < arr->count; i++) {
                 if (i > 0) printf(", ");
-                print_element(arr->items[i]);   /* ricorsivo: gestisce array annidati */
+                print_element(arr->items[i], depth + 1);   /* ricorsivo: array annidati */
             }
             printf("]");
             break;
         }
     }
+}
+
+void value_print(Value v) {
+    value_print_depth(v, 0);
 }
 
 const char *value_type_name(ValueType t) {

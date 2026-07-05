@@ -117,11 +117,13 @@ a[1] = 99;               // scrittura: ora a è [10, 99, 30]
 print a[1] + a[2];       // 129
 ```
 
-Un indice **fuori dai limiti** (negativo o ≥ lunghezza) è un errore a runtime,
-non un crash:
+L'indice dev'essere un **numero intero** (`a[2]` o l'equivalente `a[2.0]`); un
+indice con parte decimale come `a[2.9]` è un errore, non viene troncato. Un indice
+**fuori dai limiti** (negativo o ≥ lunghezza) è un errore a runtime, non un crash:
 ```
 var a = [1, 2];
 print a[5];              // Errore a runtime: indice 5 fuori dai limiti...
+print a[0.5];            // Errore a runtime: l'indice ... dev'essere un numero intero
 ```
 
 **Per riferimento** — questa è la parte importante. Assegnare un array a
