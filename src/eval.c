@@ -46,6 +46,17 @@ static void mark_roots(void) {
     if (g_it == NULL) return;
     gc_mark_env(g_it->globals);
     gc_mark_env(g_it->env);
+    /* Le radici temporanee (oggetti a meta' calcolo) e gli ambienti dei
+     * chiamanti sospesi li protegge chi li ha in mano, con gc_push_temp. */
+}
+
+/* L'oggetto gestito dal GC referenziato da un Value (NULL se non ne referenzia).
+ * Serve per proteggere un Value come radice temporanea con gc_push_temp. */
+static Obj *value_obj(Value v) {
+    if (v.type == VAL_ARRAY)    return (Obj *)v.as.array;
+    if (v.type == VAL_STRING)   return (Obj *)v.as.string;
+    if (v.type == VAL_FUNCTION) return (Obj *)v.as.function.closure;
+    return NULL;
 }
 
 static void runtime_error(Interp *it, const char *message) {
@@ -180,7 +191,11 @@ static Value evaluate(Expr *expr, Interp *it) {
         case EXPR_BINARY: {
             Value l = evaluate(expr->as.binary.left, it);
             if (it->had_error) return l;
+            /* proteggo 'l' (se e' un oggetto) mentre valuto il destro: quello
+             * potrebbe chiamare una funzione e far scattare una raccolta. */
+            gc_push_temp(value_obj(l));
             Value r = evaluate(expr->as.binary.right, it);
+            gc_pop_temp(1);
             if (it->had_error) return r;
             TokenType op = expr->as.binary.op;
 
@@ -258,20 +273,23 @@ static Value evaluate(Expr *expr, Interp *it) {
                 return value_number(0);
             }
 
+            /* Protezioni GC. Da qui in poi si valutano gli argomenti (che
+             * possono chiamare funzioni e far scattare una raccolta) e si esegue
+             * il corpo. Proteggo: (1) la closure catturata dalla funzione, (2) il
+             * nuovo ambiente di chiamata mentre non e' ancora quello corrente, e
+             * (3) l'ambiente del CHIAMANTE, che non e' nella catena del nuovo
+             * scope (call_env racchiude la closure, non il chiamante). */
+            gc_push_temp((Obj *)callee.as.function.closure);   /* (1) */
+
             /* Nuovo scope per la chiamata. Racchiude l'ambiente CATTURATO dalla
-             * funzione (la sua closure), non solo il globale: cosi' la funzione
-             * vede le variabili del posto dove e' stata definita.
-             *
-             * Lo alloco sull'heap e NON lo libero: una closure potrebbe
-             * "portarselo via" (se la funzione viene restituita) e farlo vivere
-             * oltre la chiamata. Senza un garbage collector, la scelta semplice
-             * e corretta e' lasciarlo in memoria (liberato a fine processo). */
+             * funzione (la closure): cosi' vede le variabili di dove e' definita. */
             Env *call_env = gc_new_env();
             call_env->enclosing = callee.as.function.closure;
+            gc_push_temp((Obj *)call_env);                     /* (2) */
 
             for (int i = 0; i < paramc; i++) {
                 Value arg = evaluate(expr->as.call.args[i], it);
-                if (it->had_error) return value_number(0);
+                if (it->had_error) { gc_pop_temp(2); return value_number(0); }
                 env_define(call_env, decl->as.function.params[i], arg);
             }
 
@@ -279,15 +297,18 @@ static Value evaluate(Expr *expr, Interp *it) {
              * diamo un errore controllato invece di far esplodere lo stack. */
             if (it->call_depth >= MAX_CALL_DEPTH) {
                 runtime_error(it, "profondita' di ricorsione massima superata (troppe chiamate annidate).");
+                gc_pop_temp(2);
                 return value_number(0);
             }
 
             Env *saved = it->env;
+            gc_push_temp((Obj *)saved);                        /* (3) */
             it->env = call_env;
             it->call_depth++;
             execute(decl->as.function.body, it);
             it->call_depth--;
             it->env = saved;
+            gc_pop_temp(3);   /* (3),(2),(1): saved, call_env, closure */
 
             Value result;
             if (it->is_returning) {
@@ -303,18 +324,24 @@ static Value evaluate(Expr *expr, Interp *it) {
             /* Creiamo un nuovo array sull'heap (registrato nell'arena) e ci
              * mettiamo dentro, uno per uno, i valori degli elementi. */
             Array *arr = array_new();   /* creato e tracciato dal GC */
+            /* Proteggo l'array (a meta' costruzione) mentre valuto gli elementi:
+             * uno di essi potrebbe chiamare una funzione e far scattare il GC. */
+            gc_push_temp((Obj *)arr);
             for (int i = 0; i < expr->as.array.count; i++) {
                 Value elem = evaluate(expr->as.array.elements[i], it);
-                if (it->had_error) return value_number(0);
+                if (it->had_error) { gc_pop_temp(1); return value_number(0); }
                 array_push(arr, elem);
             }
+            gc_pop_temp(1);
             return value_array(arr);
         }
 
         case EXPR_INDEX: {
             Value arr_v = evaluate(expr->as.index.array, it);
             if (it->had_error) return arr_v;
+            gc_push_temp(value_obj(arr_v));   /* proteggo arr_v mentre valuto l'indice */
             Value idx_v = evaluate(expr->as.index.index, it);
+            gc_pop_temp(1);
             if (it->had_error) return idx_v;
 
             int index;
@@ -325,9 +352,11 @@ static Value evaluate(Expr *expr, Interp *it) {
         case EXPR_INDEX_SET: {
             Value arr_v = evaluate(expr->as.index_set.array, it);
             if (it->had_error) return arr_v;
+            gc_push_temp(value_obj(arr_v));   /* proteggo arr_v per indice e valore */
             Value idx_v = evaluate(expr->as.index_set.index, it);
-            if (it->had_error) return idx_v;
+            if (it->had_error) { gc_pop_temp(1); return idx_v; }
             Value val = evaluate(expr->as.index_set.value, it);
+            gc_pop_temp(1);
             if (it->had_error) return val;
 
             int index;
@@ -378,10 +407,12 @@ static void execute(Stmt *stmt, Interp *it) {
 
             Program *body = &stmt->as.block.body;
             for (int i = 0; i < body->count; i++) {
-                /* Confine sicuro: fuori da ogni chiamata (call_depth 0), tra
-                 * un'istruzione e l'altra. E' qui che il GC puo' recuperare la
-                 * spazzatura accumulata (es. gli ambienti dei giri di un ciclo). */
-                if (it->call_depth == 0) gc_maybe_collect();
+                /* Confine sicuro tra un'istruzione e l'altra: qui non c'e' nessun
+                 * temporaneo vivo "a meta' calcolo", quindi il GC puo' girare in
+                 * sicurezza (anche dentro le chiamate: gli ambienti sospesi e i
+                 * temporanei delle espressioni esterne sono protetti da gc_push_temp).
+                 * E' qui che si recupera la spazzatura dei giri di un ciclo. */
+                gc_maybe_collect();
                 execute(body->statements[i], it);
                 if (it->had_error || it->is_returning) break;
             }
@@ -403,6 +434,10 @@ static void execute(Stmt *stmt, Interp *it) {
 
         case STMT_WHILE: {
             for (;;) {
+                /* Confine sicuro a ogni giro: copre anche i while col corpo di
+                 * una sola istruzione (senza blocco), che non passerebbero dal
+                 * punto di raccolta di STMT_BLOCK. */
+                gc_maybe_collect();
                 Value cond = evaluate(stmt->as.while_stmt.condition, it);
                 if (it->had_error) break;
                 if (!is_truthy(cond)) break;

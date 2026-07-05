@@ -50,6 +50,12 @@ void gc_set_mark_roots(void (*fn)(void));
 void gc_mark_object(Obj *o);
 void gc_mark_env(struct Env *env);
 
+/* Radici temporanee: proteggono un oggetto vivo solo in una variabile C durante
+ * il calcolo di un'espressione. Sempre in coppia push/pop (o pop(n)). Accetta
+ * anche NULL (ignorato), cosi' si puo' proteggere un Value "qualunque". */
+void gc_push_temp(Obj *o);
+void gc_pop_temp(int n);
+
 /* Chiamata ai "confini sicuri" (tra un'istruzione e l'altra, fuori dalle
  * chiamate): raccoglie se siamo oltre la soglia di memoria. */
 void gc_maybe_collect(void);

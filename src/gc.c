@@ -42,6 +42,29 @@ static Obj **g_gray = NULL;
 static int   g_gray_count = 0;
 static int   g_gray_cap = 0;
 
+/* La pila delle RADICI TEMPORANEE: oggetti vivi solo in variabili C durante il
+ * calcolo di un'espressione (es. un array a meta' costruzione, l'operando
+ * sinistro di un + mentre valuto il destro). eval.c li protegge con push/pop
+ * cosi' una raccolta scattata dentro una chiamata non li spazza via. */
+static Obj **g_temp = NULL;
+static int   g_temp_count = 0;
+static int   g_temp_cap = 0;
+
+void gc_push_temp(Obj *o) {
+    if (g_temp_count == g_temp_cap) {
+        int nc = g_temp_cap < 8 ? 8 : g_temp_cap * 2;
+        Obj **grown = realloc(g_temp, sizeof(Obj *) * (size_t)nc);
+        if (grown == NULL) { fprintf(stderr, "Memoria esaurita (GC).\n"); exit(1); }
+        g_temp = grown;
+        g_temp_cap = nc;
+    }
+    g_temp[g_temp_count++] = o;   /* o puo' essere NULL: verra' ignorato in mark */
+}
+
+void gc_pop_temp(int n) {
+    g_temp_count -= n;
+}
+
 /* Byte "occupati" da un oggetto, per la contabilita' della soglia (stima: la
  * sola struttura, ignoriamo items/voci; basta a decidere QUANDO raccogliere). */
 static size_t obj_size(Obj *o) {
@@ -59,6 +82,7 @@ void gc_init(void) {
     g_count = 0;
     g_next_gc = (size_t)1 << 20;
     g_gray_count = 0;
+    g_temp_count = 0;
     g_log = (getenv("NURA_GC_LOG") != NULL);
     g_stress = (getenv("NURA_GC_STRESS") != NULL);
 }
@@ -206,9 +230,11 @@ static void gc_collect(void) {
     size_t before_count = g_count;
     size_t before_bytes = g_bytes;
 
-    /* 1. MARK: parti dalle radici, poi svuota la gray stack. */
+    /* 1. MARK: parti dalle radici (ambienti vivi + radici temporanee), poi
+     * svuota la gray stack annerendo i figli. */
     g_gray_count = 0;
     if (g_mark_roots) g_mark_roots();
+    for (int i = 0; i < g_temp_count; i++) gc_mark_object(g_temp[i]);
     while (g_gray_count > 0) {
         Obj *o = g_gray[--g_gray_count];
         blacken(o);
@@ -254,4 +280,8 @@ void gc_free_all(void) {
     g_gray = NULL;
     g_gray_count = 0;
     g_gray_cap = 0;
+    free(g_temp);
+    g_temp = NULL;
+    g_temp_count = 0;
+    g_temp_cap = 0;
 }

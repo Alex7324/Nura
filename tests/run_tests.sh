@@ -172,6 +172,11 @@ check "GC: stringa viva sopravvive" 'var s="Nura"; for(var i=0;i<200000;i=i+1){ 
 # Stringhe ora sotto GC: un ciclo di sole stringhe non leaka piu' e la stringa
 # viva sopravvive alla raccolta della spazzatura testuale.
 check "GC: ciclo di sole stringhe" 'var s="ok"; for(var i=0;i<200000;i=i+1){ var t="a"+"b"; } print s+"!";' "ok!"
+# Il GC gira anche DENTRO le chiamate: un ciclo lungo in una funzione non OOM.
+check "GC: ciclo dentro funzione" "fun run(){ var s=0; for(var i=0;i<200000;i=i+1){ var a=[i]; s=s+1; } return s; } print run();" "200000"
+# Radici temporanee: oggetti vivi solo in variabili C attraverso una chiamata.
+check "GC: array literal span chiamate" "fun mk(x){return [x,x];} print [mk(1),mk(2)];" "[[1, 1], [2, 2]]"
+check "GC: arg che alloca tra gli arg" "fun s3(a,b,c){return a+b+c;} fun m(){return [1];} print s3(m()[0],m()[0],m()[0]);" "3"
 
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
