@@ -50,7 +50,7 @@ Quattro tipi di valore: **numeri**, **booleani** (`true`/`false`), **stringhe**
 `arr[i]` e passate **per riferimento**). Gestisce: espressioni con `+ - * / %`, confronti
 (`< <= > >= == !=`), operatori logici `&&` e `||` (con corto circuito), meno unario
 e il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
-**`print`**; **controllo di flusso** con `if`/`else`, `while` e blocchi `{ }` con
+**`print`**; **controllo di flusso** con `if`/`else`, `while`, `for` e blocchi `{ }` con
 scope locale; **funzioni** (`fun`, `return`) con **ricorsione** e **closures**
 (una funzione ricorda le variabili di dove è nata). Le variabili vivono in un
 ambiente realizzato come **tabella hash**. Segnala sia gli
@@ -121,6 +121,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 5 — Controllo di flusso**: `if`/`else`, `while`, blocchi `{ }`, operatore `!`
 - [x] **Fase 6 — Funzioni**: definizione, chiamata, `return`, ricorsione, scope locale
 - [x] **Fase 7 — Array**: literal `[..]`, indicizzazione `arr[i]` in lettura e scrittura, semantica per riferimento
+- [x] **Fase 8 — Ciclo `for`**: `for (init; cond; incr)`, implementato come zucchero sintattico che il parser traduce in un `while`
 
 ## Come l'ho sviluppato
 

@@ -361,8 +361,9 @@ static Stmt *expression_statement(Parser *p);
 static Stmt *block_statement(Parser *p);
 static Stmt *if_statement(Parser *p);
 static Stmt *while_statement(Parser *p);
+static Stmt *for_statement(Parser *p);
 
-/* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt |
+/* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt | forStmt |
  *              returnStmt | block | exprStmt */
 static Stmt *statement(Parser *p) {
     if (match(p, TOKEN_FUN))    return fun_declaration(p);
@@ -370,6 +371,7 @@ static Stmt *statement(Parser *p) {
     if (match(p, TOKEN_PRINT))  return print_statement(p);
     if (match(p, TOKEN_IF))     return if_statement(p);
     if (match(p, TOKEN_WHILE))  return while_statement(p);
+    if (match(p, TOKEN_FOR))    return for_statement(p);
     if (match(p, TOKEN_RETURN)) return return_statement(p);
     if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
@@ -435,6 +437,85 @@ static Stmt *while_statement(Parser *p) {
 
     Stmt *body = statement(p);
     return stmt_while(condition, body);
+}
+
+/* forStmt -> "for" "(" ( varDecl | exprStmt | ";" )
+ *                       expression? ";"
+ *                       expression? ")" statement            ('for' gia' consumato)
+ *
+ * Il 'for' NON e' un nuovo tipo di nodo: e' "zucchero sintattico". Qui lo
+ * traduciamo (desugaring) in costrutti che l'evaluator gia' conosce, cioe' un
+ * blocco che contiene un while. Le tre clausole (iniz; cond; incr) diventano:
+ *
+ *     {
+ *         iniz;
+ *         while (cond) {
+ *             corpo;
+ *             incr;
+ *         }
+ *     }
+ *
+ * Cosi' l'evaluator resta invariato: al momento dell'esecuzione vedra' solo
+ * blocchi e while. Ogni clausola e' facoltativa. */
+static Stmt *for_statement(Parser *p) {
+    consume(p, TOKEN_LPAREN, "Mi aspettavo '(' dopo 'for'.");
+
+    /* 1) Inizializzatore: una dichiarazione 'var', un'espressione, o niente.
+     *    Ognuna di queste consuma anche il proprio ';'. */
+    Stmt *initializer;
+    if (match(p, TOKEN_SEMICOLON)) {
+        initializer = NULL;                    /* for (; ...; ...) */
+    } else if (match(p, TOKEN_VAR)) {
+        initializer = var_declaration(p);      /* var i = 0;       */
+    } else {
+        initializer = expression_statement(p); /* i = 0;           */
+    }
+
+    /* 2) Condizione: se manca, il ciclo e' "sempre vero" (come while (true)). */
+    Expr *condition = NULL;
+    if (!check(p, TOKEN_SEMICOLON)) {
+        condition = expression(p);
+    }
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo la condizione del for.");
+
+    /* 3) Incremento: un'espressione da eseguire dopo ogni giro (o niente). */
+    Expr *increment = NULL;
+    if (!check(p, TOKEN_RPAREN)) {
+        increment = expression(p);
+    }
+    consume(p, TOKEN_RPAREN, "Mi aspettavo ')' dopo le clausole del for.");
+
+    /* 4) Corpo del ciclo. */
+    Stmt *body = statement(p);
+
+    /* ---- DESUGARING: montiamo l'albero equivalente ---- */
+
+    /* corpo = { corpo; incr; }   (l'incremento va DOPO il corpo, ogni giro) */
+    if (increment != NULL) {
+        Program inner;
+        program_init(&inner);
+        program_add(&inner, body);
+        program_add(&inner, stmt_expr(increment));
+        body = stmt_block(inner);
+    }
+
+    /* condizione assente => true costante */
+    if (condition == NULL) condition = ast_bool(1);
+
+    /* corpo = while (cond) corpo */
+    body = stmt_while(condition, body);
+
+    /* corpo = { iniz; while... }  (il blocco esterno da' all'init il suo scope,
+     * cosi' la variabile del for non "esce" dal ciclo) */
+    if (initializer != NULL) {
+        Program outer;
+        program_init(&outer);
+        program_add(&outer, initializer);
+        program_add(&outer, body);
+        body = stmt_block(outer);
+    }
+
+    return body;
 }
 
 /* funDecl -> "fun" IDENTIFIER "(" ( IDENTIFIER ( "," IDENTIFIER )* )? ")" block

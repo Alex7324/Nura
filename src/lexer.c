@@ -184,6 +184,7 @@ static TokenType identifier_type(Lexer *lexer) {
         { "if",     TOKEN_IF     },
         { "else",   TOKEN_ELSE   },
         { "while",  TOKEN_WHILE  },
+        { "for",    TOKEN_FOR    },
         { "return", TOKEN_RETURN },
         { "print",  TOKEN_PRINT  },
         { "true",   TOKEN_TRUE   },

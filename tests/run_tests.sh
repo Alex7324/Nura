@@ -135,6 +135,23 @@ check "array ciclico non crasha"   "var a=[1]; a[0]=a; print a;" "$CICLICO"
 TROPPI="$(printf '[%.0s' $(seq 1 1200))"
 check "annidamento eccessivo"      "print ${TROPPI}1;" "[riga 1] Errore di sintassi vicino a '[': espressione troppo annidata."
 
+echo "== Fase 8: ciclo for (zucchero sintattico -> while) =="
+check "for base 0..2"        "for (var i=0; i<3; i=i+1) print i;"   "0
+1
+2"
+check "for con blocco"       "var s=0; for (var i=1; i<=4; i=i+1) { s=s+i; } print s;" "10"
+check "for somma su array"   "var a=[10,20,30]; var s=0; for (var i=0; i<3; i=i+1) s=s+a[i]; print s;" "60"
+check "for: var non esce"    "for (var k=0; k<2; k=k+1) print k; print k;" "0
+1
+Errore a runtime: variabile 'k' non definita."
+check "for init esterno"     "var i=0; for (i=0; i<3; i=i+1) {} print i;" "3"
+check "for solo condizione"  "var i=0; for (; i<2;) { print i; i=i+1; }" "0
+1"
+check "for annidati"         "for (var r=0; r<2; r=r+1) for (var c=0; c<2; c=c+1) print r*10+c;" "0
+1
+10
+11"
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

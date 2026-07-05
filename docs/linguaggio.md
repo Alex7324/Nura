@@ -273,6 +273,31 @@ while (i <= 5) {
 }
 ```
 
+### for
+Il classico ciclo con tre clausole: `for (inizializzazione; condizione; incremento) corpo`.
+```
+for (var i = 0; i < 5; i = i + 1) {
+    print i;                 // stampa 0 1 2 3 4
+}
+```
+- La **variabile** dichiarata nell'inizializzazione vive solo dentro il ciclo
+  (fuori non esiste più).
+- Tutte e tre le clausole sono **facoltative**: `for (;;) { ... }` è un ciclo
+  infinito, `for (; i < n;)` usa solo la condizione, ecc.
+
+Comodo per scorrere un array:
+```
+var a = [10, 20, 30];
+for (var i = 0; i < 3; i = i + 1) {
+    print a[i];
+}
+```
+
+> Sotto il cofano il `for` non è un costrutto a sé: è **zucchero sintattico**.
+> Il parser lo traduce in un blocco con un `while` dentro —
+> `for (init; cond; incr) corpo` diventa `{ init; while (cond) { corpo; incr; } }`.
+> (Puoi vederlo con lo strumento di debug `nura_run`.)
+
 ## 10. Funzioni
 
 Si definiscono con `fun`, si chiamano con `nome(argomenti)`, e restituiscono un
@@ -352,13 +377,14 @@ Grammatica di Nura in forma sintetica (`*` = zero o più, `?` = facoltativo).
 ```
 programma   -> istruzione* EOF
 
-istruzione  -> varDecl | funDecl | print | if | while | return | blocco | exprStmt
+istruzione  -> varDecl | funDecl | print | if | while | for | return | blocco | exprStmt
 varDecl     -> "var" IDENT "=" espressione ";"
 funDecl     -> "fun" IDENT "(" parametri? ")" blocco
 parametri   -> IDENT ( "," IDENT )*
 print       -> "print" espressione ";"
 if          -> "if" "(" espressione ")" istruzione ( "else" istruzione )?
 while       -> "while" "(" espressione ")" istruzione
+for         -> "for" "(" ( varDecl | exprStmt | ";" ) espressione? ";" espressione? ")" istruzione
 return      -> "return" espressione? ";"
 blocco      -> "{" istruzione* "}"
 exprStmt    -> espressione ";"
