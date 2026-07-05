@@ -256,6 +256,10 @@ fun fattoriale(k) {
 print fattoriale(5);         // 120
 ```
 
+> ⚠️ **Limite di profondità.** Per evitare crash, la ricorsione ha un tetto: oltre
+> circa **1000 chiamate annidate**, Nura interrompe con un errore a runtime
+> ("profondità di ricorsione massima superata") invece di bloccarsi.
+
 ## 11. Closures
 
 Una funzione **ricorda** le variabili del posto dove è stata definita, anche dopo

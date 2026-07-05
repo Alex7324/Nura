@@ -110,6 +110,7 @@ check "variabile non def."   "print y;"           "Errore a runtime: variabile '
 check "assegn. a non def."   "z = 5;"             "Errore a runtime: assegnamento a variabile 'z' non definita."
 check "tipo sbagliato"       'print "a" - 1;'     "Errore a runtime: l'operatore richiede un numero, ma il valore e' di tipo stringa."
 check "+ tipi misti"         'print 1 + "a";'     "Errore a runtime: '+' vuole due numeri o due stringhe."
+check "ricorsione infinita"  "fun f() { return f(); } print f();"  "Errore a runtime: profondita' di ricorsione massima superata (troppe chiamate annidate)."
 
 echo "== Errori di sintassi =="
 check "espressione monca"    "print 1 +;"         "[riga 1] Errore di sintassi vicino a ';': Mi aspettavo un numero, un nome o una '('."

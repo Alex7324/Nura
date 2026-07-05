@@ -5,6 +5,11 @@
 #include <string.h>
 #include <math.h>
 
+/* Limite di sicurezza per la ricorsione: oltre questa profondita' di chiamate
+ * annidate diamo un errore controllato, invece di rischiare uno stack overflow
+ * del C (che farebbe crashare tutto l'interprete). */
+#define MAX_CALL_DEPTH 1000
+
 /*
  * Contesto dell'esecuzione:
  *   - env: l'ambiente delle variabili
@@ -18,6 +23,7 @@ typedef struct {
     int had_error;
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
     Value return_value;
+    int call_depth;    /* quante chiamate di funzione annidate stiamo eseguendo */
     char **strings;
     int str_count;
     int str_cap;
@@ -221,9 +227,18 @@ static Value evaluate(Expr *expr, Interp *it) {
                 env_define(call_env, decl->as.function.params[i], arg);
             }
 
+            /* Guard-rail anti-crash: se le chiamate annidate sono troppe,
+             * diamo un errore controllato invece di far esplodere lo stack. */
+            if (it->call_depth >= MAX_CALL_DEPTH) {
+                runtime_error(it, "profondita' di ricorsione massima superata (troppe chiamate annidate).");
+                return value_number(0);
+            }
+
             Env *saved = it->env;
             it->env = call_env;
+            it->call_depth++;
             execute(decl->as.function.body, it);
+            it->call_depth--;
             it->env = saved;
 
             Value result;
@@ -338,6 +353,7 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.had_error = 0;
     it.is_returning = 0;
     it.return_value = value_number(0);
+    it.call_depth = 0;
     it.strings = NULL;
     it.str_count = 0;
     it.str_cap = 0;
