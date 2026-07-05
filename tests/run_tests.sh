@@ -169,6 +169,9 @@ check "GC: ciclo con garbage"  "var s=0; for(var i=0;i<200000;i=i+1){ var t=[i];
 check "GC: array vivo sopravvive" "var a=[5,6]; for(var i=0;i<200000;i=i+1){ var t=[i]; } print a[1];" "6"
 check "GC: closure sopravvive"  "fun mk(){ var n=0; fun i(){ n=n+1; return n; } return i; } var c=mk(); for(var k=0;k<200000;k=k+1){ c(); } print c();" "200001"
 check "GC: stringa viva sopravvive" 'var s="Nura"; for(var i=0;i<200000;i=i+1){ var t=[i]; } print s;' "Nura"
+# Stringhe ora sotto GC: un ciclo di sole stringhe non leaka piu' e la stringa
+# viva sopravvive alla raccolta della spazzatura testuale.
+check "GC: ciclo di sole stringhe" 'var s="ok"; for(var i=0;i<200000;i=i+1){ var t="a"+"b"; } print s+"!";' "ok!"
 
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."

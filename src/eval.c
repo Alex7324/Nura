@@ -25,12 +25,8 @@ typedef struct {
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
     Value return_value;
     int call_depth;    /* quante chiamate di funzione annidate stiamo eseguendo */
-    char **strings;    /* arena delle stringhe create a runtime (non ancora GC) */
-    int str_count;
-    int str_cap;
-    /* NB: gli array e gli ambienti NON hanno piu' un'arena qui: sono oggetti
-     * gestiti dal garbage collector (vedi gc.c), che li traccia in una sua
-     * lista globale e li liberera' lui. */
+    /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
+     * collector (vedi gc.c): niente piu' arene manuali qui dentro. */
 } Interp;
 
 /* evaluate chiama execute (per le chiamate di funzione) e viceversa:
@@ -56,21 +52,6 @@ static void runtime_error(Interp *it, const char *message) {
     if (it->had_error) return;
     it->had_error = 1;
     fprintf(stderr, "Errore a runtime: %s\n", message);
-}
-
-/* Registra una stringa allocata a runtime, per liberarla a fine programma. */
-static char *intern(Interp *it, char *s) {
-    if (it->str_count == it->str_cap) {
-        int new_cap;
-        if (it->str_cap < 8) new_cap = 8;
-        else                 new_cap = it->str_cap * 2;
-        char **grown = realloc(it->strings, sizeof(char *) * (size_t)new_cap);
-        if (grown == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-        it->strings = grown;
-        it->str_cap = new_cap;
-    }
-    it->strings[it->str_count++] = s;
-    return s;
 }
 
 /* Valida un accesso arr[i]: controlla che arr_v sia un array, che idx_v sia
@@ -129,15 +110,17 @@ static int require_number(Interp *it, Value v, const char *what) {
     return 0;
 }
 
-/* Concatena due stringhe in una nuova (registrata nell'arena). */
+/* Concatena due stringhe in una NUOVA ObjString gestita dal GC. */
 static Value concat(Interp *it, const char *a, const char *b) {
+    (void)it;   /* non serve piu' l'arena: ci pensa il GC */
     size_t la = strlen(a);
     size_t lb = strlen(b);
-    char *s = malloc(la + lb + 1);
-    if (s == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-    memcpy(s, a, la);
-    memcpy(s + la, b, lb + 1);   /* copia anche il '\0' di b */
-    intern(it, s);
+    char *buf = malloc(la + lb + 1);
+    if (buf == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    memcpy(buf, a, la);
+    memcpy(buf + la, b, lb + 1);   /* copia anche il '\0' di b */
+    ObjString *s = gc_new_string(buf, (int)(la + lb));
+    free(buf);                     /* gc_new_string ha fatto la sua copia */
     return value_string(s);
 }
 
@@ -153,7 +136,9 @@ static Value evaluate(Expr *expr, Interp *it) {
 
         case EXPR_NUMBER: return value_number(expr->as.number.value);
         case EXPR_BOOL:   return value_bool(expr->as.boolean.value);
-        case EXPR_STRING: return value_string(expr->as.string.value);  /* punta all'AST */
+        case EXPR_STRING:   /* crea una ObjString (gestita dal GC) dal literal */
+            return value_string(gc_new_string(expr->as.string.value,
+                                              (int)strlen(expr->as.string.value)));
 
         case EXPR_VARIABLE: {
             Value v;
@@ -208,7 +193,7 @@ static Value evaluate(Expr *expr, Interp *it) {
                 if (l.type == VAL_NUMBER && r.type == VAL_NUMBER)
                     return value_number(l.as.number + r.as.number);
                 if (l.type == VAL_STRING && r.type == VAL_STRING)
-                    return concat(it, l.as.string, r.as.string);
+                    return concat(it, l.as.string->chars, r.as.string->chars);
                 runtime_error(it, "'+' vuole due numeri o due stringhe.");
                 return value_number(0);
             }
@@ -459,9 +444,6 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.is_returning = 0;
     it.return_value = value_number(0);
     it.call_depth = 0;
-    it.strings = NULL;
-    it.str_count = 0;
-    it.str_cap = 0;
 
     /* Dico al GC dove trovare le radici (via mark_roots, che legge g_it). */
     g_it = &it;
@@ -478,11 +460,8 @@ void run_program(Program *program, Env *env, int *had_error) {
     gc_set_mark_roots(NULL);
     g_it = NULL;
 
-    /* Libera le stringhe create a runtime (le concatenazioni). Gli array e gli
-     * ambienti, invece, sono ora del garbage collector: li liberera' gc_free_all
-     * (chiamato da main.c a fine programma). */
-    for (int i = 0; i < it.str_count; i++) free(it.strings[i]);
-    free(it.strings);
+    /* Niente da liberare a mano: stringhe, array e ambienti sono del garbage
+     * collector, che li liberera' con gc_free_all (da main.c a fine programma). */
 
     *had_error = it.had_error;
 }

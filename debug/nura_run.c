@@ -69,7 +69,8 @@ static Value n_eval(Expr *e, Env *env) {
     switch (e->type) {
         case EXPR_NUMBER: return value_number(e->as.number.value);
         case EXPR_BOOL:   return value_bool(e->as.boolean.value);
-        case EXPR_STRING: return value_string(e->as.string.value);
+        case EXPR_STRING: return value_string(gc_new_string(e->as.string.value,
+                                                  (int)strlen(e->as.string.value)));
 
         case EXPR_VARIABLE: {
             Value v;
@@ -120,11 +121,12 @@ static Value n_eval(Expr *e, Env *env) {
             if (op == TOKEN_EQ)       res = value_bool(values_equal(l, r));
             else if (op == TOKEN_NEQ) res = value_bool(!values_equal(l, r));
             else if (op == TOKEN_PLUS && l.type == VAL_STRING && r.type == VAL_STRING) {
-                size_t la = strlen(l.as.string), lb = strlen(r.as.string);
-                char *s = malloc(la + lb + 1);
-                memcpy(s, l.as.string, la);
-                memcpy(s + la, r.as.string, lb + 1);
-                res = value_string(s);   /* piccolo leak: ok per un tool di debug */
+                size_t la = strlen(l.as.string->chars), lb = strlen(r.as.string->chars);
+                char *buf = malloc(la + lb + 1);
+                memcpy(buf, l.as.string->chars, la);
+                memcpy(buf + la, r.as.string->chars, lb + 1);
+                res = value_string(gc_new_string(buf, (int)(la + lb)));
+                free(buf);
             } else {
                 double a = l.as.number, b = r.as.number;
                 if (op==TOKEN_PLUS) res=value_number(a+b);

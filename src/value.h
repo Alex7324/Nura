@@ -48,6 +48,7 @@ typedef enum {
  * puo' essere definito "prima" dell'altro. I nomi bastano per i puntatori. */
 typedef struct Value Value;
 typedef struct Array Array;
+typedef struct ObjString ObjString;
 
 /* Un Array e' un array dinamico di Value: stessa idea di Program (lista di
  * Stmt*) o della tabella hash. `items` cresce raddoppiando quando si riempie. */
@@ -58,12 +59,21 @@ struct Array {
     int capacity;   /* quanti ce ne stanno prima di dover crescere */
 };
 
+/* Una stringa a runtime e' anch'essa un oggetto gestito dal GC. E' immutabile
+ * e CONDIVISA: piu' variabili possono puntare alla stessa ObjString senza
+ * copiarla (ci pensa il GC a liberarla quando non serve piu'). */
+struct ObjString {
+    Obj obj;        /* intestazione GC: DEVE essere il primo campo */
+    char *chars;    /* i caratteri (terminati da '\0'), posseduti dall'oggetto */
+    int length;
+};
+
 struct Value {
     ValueType type;
     union {
         double number;
-        int boolean;    /* 0 = false, 1 = true */
-        char *string;   /* puntatore "in prestito" (non posseduto) */
+        int boolean;        /* 0 = false, 1 = true */
+        ObjString *string;  /* puntatore condiviso a una stringa gestita dal GC */
         /* Una funzione porta con se' due cose: il suo corpo (decl, nell'AST)
          * e l'ambiente dove e' stata DEFINITA (closure). E' la closure che le
          * permette di "ricordare" le variabili di quel posto. */
@@ -75,7 +85,7 @@ struct Value {
 /* Costruttori */
 Value value_number(double n);
 Value value_bool(int b);
-Value value_string(char *s);
+Value value_string(ObjString *s);
 Value value_function(struct Stmt *decl, struct Env *closure);
 Value value_array(Array *arr);
 

@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /*
  * Garbage collector mark-and-sweep.
@@ -45,8 +46,9 @@ static int   g_gray_cap = 0;
  * sola struttura, ignoriamo items/voci; basta a decidere QUANDO raccogliere). */
 static size_t obj_size(Obj *o) {
     switch (o->type) {
-        case OBJ_ARRAY: return sizeof(Array);
-        case OBJ_ENV:   return sizeof(Env);
+        case OBJ_ARRAY:  return sizeof(Array);
+        case OBJ_ENV:    return sizeof(Env);
+        case OBJ_STRING: return sizeof(ObjString);
     }
     return 0;
 }
@@ -101,6 +103,16 @@ struct Env *gc_new_env(void) {
     return e;
 }
 
+struct ObjString *gc_new_string(const char *chars, int length) {
+    ObjString *s = alloc_object(sizeof(ObjString), OBJ_STRING);
+    s->chars = malloc((size_t)length + 1);
+    if (s->chars == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    memcpy(s->chars, chars, (size_t)length);
+    s->chars[length] = '\0';
+    s->length = length;
+    return s;
+}
+
 /* ------------------------------------------------------------------ */
 /*  MARK                                                              */
 /* ------------------------------------------------------------------ */
@@ -128,7 +140,8 @@ void gc_mark_env(struct Env *env) {
 static void mark_value(Value v) {
     if (v.type == VAL_ARRAY)         gc_mark_object((Obj *)v.as.array);
     else if (v.type == VAL_FUNCTION) gc_mark_object((Obj *)v.as.function.closure);
-    /* numeri, booleani e stringhe non referenziano oggetti gestiti */
+    else if (v.type == VAL_STRING)   gc_mark_object((Obj *)v.as.string);
+    /* numeri e booleani non referenziano oggetti gestiti */
 }
 
 /* "Annerisce" un oggetto grigio: marca tutto cio' che referenzia. */
@@ -147,6 +160,8 @@ static void blacken(Obj *o) {
             gc_mark_env(e->enclosing);   /* anche lo scope che lo racchiude */
             break;
         }
+        case OBJ_STRING:
+            break;   /* una stringa non referenzia altri oggetti: e' una foglia */
     }
 }
 
@@ -160,6 +175,12 @@ static void free_object(Obj *o) {
     switch (o->type) {
         case OBJ_ARRAY: array_free((Array *)o);        break;
         case OBJ_ENV:   env_free((Env *)o); free(o);   break;
+        case OBJ_STRING: {
+            ObjString *s = (ObjString *)o;
+            free(s->chars);
+            free(s);
+            break;
+        }
     }
 }
 

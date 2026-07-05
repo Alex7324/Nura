@@ -20,7 +20,7 @@ Value value_bool(int b) {
     return v;
 }
 
-Value value_string(char *s) {
+Value value_string(ObjString *s) {
     Value v;
     v.type = VAL_STRING;
     v.as.string = s;
@@ -76,25 +76,19 @@ void array_free(Array *arr) {
     free(arr);
 }
 
-/* Copia profonda: per una stringa ne alloca una nuova copia; per numeri e
- * booleani non c'e' niente da copiare (si ritorna il valore com'e').
- * Per un ARRAY copiamo solo il puntatore (semantica per riferimento): due
- * variabili condividono lo stesso array, quindi modificarlo da una si vede
- * anche dall'altra. */
+/* Copia di un Value. Ora e' banale: numeri e booleani si copiano per valore;
+ * stringhe, funzioni e array sono OGGETTI CONDIVISI (gestiti dal GC), quindi si
+ * copia solo il puntatore. Nessuna copia profonda: ci pensa il garbage
+ * collector a tenere in vita cio' che serve. */
 Value value_copy(Value v) {
-    if (v.type != VAL_STRING) return v;
-    size_t size = strlen(v.as.string) + 1;
-    char *copy = malloc(size);
-    if (copy == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
-    memcpy(copy, v.as.string, size);
-    return value_string(copy);
+    return v;
 }
 
-/* Libera la stringa posseduta da un Value (no-op per numeri e booleani).
- * Per gli array e' un no-op: sono condivisi e vivono nell'arena, che li
- * liberera' a fine programma. Liberarli qui darebbe puntatori penzolanti. */
+/* Non c'e' piu' niente da liberare a mano: le stringhe e gli array sono del GC,
+ * numeri e booleani vivono nel Value stesso. Resta come no-op per non toccare
+ * i (tanti) punti che la chiamano. */
 void value_free(Value v) {
-    if (v.type == VAL_STRING) free(v.as.string);
+    (void)v;
 }
 
 /* Regola di verita': false e il numero 0 sono "falsi", tutto il resto e'
@@ -117,7 +111,7 @@ int values_equal(Value a, Value b) {
     switch (a.type) {
         case VAL_NUMBER:   return a.as.number == b.as.number;
         case VAL_BOOL:     return a.as.boolean == b.as.boolean;
-        case VAL_STRING:   return strcmp(a.as.string, b.as.string) == 0;
+        case VAL_STRING:   return strcmp(a.as.string->chars, b.as.string->chars) == 0;
         case VAL_FUNCTION: return a.as.function.decl == b.as.function.decl;
         /* Due array sono "uguali" solo se sono LO STESSO array (stesso
          * puntatore), coerente con la semantica per riferimento: proprio come
@@ -140,7 +134,7 @@ static void value_print_depth(Value v, int depth);
  * tra virgolette, cosi' [1, "ciao"] non si confonde con [1, ciao]. Per gli
  * altri tipi si comporta come value_print. */
 static void print_element(Value v, int depth) {
-    if (v.type == VAL_STRING) printf("\"%s\"", v.as.string);
+    if (v.type == VAL_STRING) printf("\"%s\"", v.as.string->chars);
     else                      value_print_depth(v, depth);
 }
 
@@ -162,7 +156,7 @@ static void value_print_depth(Value v, int depth) {
             else              printf("false");
             break;
         case VAL_STRING:
-            printf("%s", v.as.string);
+            printf("%s", v.as.string->chars);
             break;
         case VAL_FUNCTION:
             printf("<funzione>");

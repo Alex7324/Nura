@@ -17,7 +17,8 @@
 
 typedef enum {
     OBJ_ARRAY,
-    OBJ_ENV
+    OBJ_ENV,
+    OBJ_STRING
 } ObjType;
 
 typedef struct Obj {
@@ -29,6 +30,7 @@ typedef struct Obj {
 /* Dichiarazioni anticipate: gli oggetti veri sono definiti in value.h / env.h. */
 struct Array;
 struct Env;
+struct ObjString;
 
 /* Ciclo di vita del collector. */
 void gc_init(void);       /* azzera lo stato: prima di eseguire un programma */
@@ -36,8 +38,9 @@ void gc_free_all(void);   /* libera TUTTI gli oggetti: a fine programma      */
 
 /* Allocazioni gestite dal GC: creano l'oggetto, ne impostano l'header e lo
  * agganciano alla lista globale. Da qui in poi la sua memoria e' del GC. */
-struct Array *gc_new_array(void);
-struct Env   *gc_new_env(void);
+struct Array     *gc_new_array(void);
+struct Env       *gc_new_env(void);
+struct ObjString *gc_new_string(const char *chars, int length);
 
 /* Registra la funzione che marca le RADICI (chi e' sicuramente vivo). La chiama
  * eval.c passando una funzione che marca gli ambienti globale e corrente, ecc. */
