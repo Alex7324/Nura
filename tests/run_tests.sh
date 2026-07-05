@@ -138,6 +138,11 @@ check "array ciclico non crasha"   "var a=[1]; a[0]=a; print a;" "$CICLICO"
 # Annidamento sintattico eccessivo: errore controllato, niente stack overflow.
 TROPPI="$(printf '[%.0s' $(seq 1 1200))"
 check "annidamento eccessivo"      "print ${TROPPI}1;" "[riga 1] Errore di sintassi vicino a '[': espressione troppo annidata."
+# Catena binaria lunghissima: parser iterativo, ma albero profondo. Deve dare
+# errore controllato, NON crashare (ne' in eval ne' in ast_free).
+CATENA="$(python -c "print('+'.join(['1']*3000))" 2>/dev/null || printf '1%.0s+1' $(seq 1 1500))"
+check "catena binaria lunga"       "print ${CATENA};" "[riga 1] Errore di sintassi vicino a '1': espressione troppo annidata."
+check "catena corta ok"            "print 1+1+1+1+1+1+1+1;" "8"
 
 echo "== Fase 8: ciclo for (zucchero sintattico -> while) =="
 check "for base 0..2"        "for (var i=0; i<3; i=i+1) print i;"   "0

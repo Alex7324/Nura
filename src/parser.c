@@ -78,16 +78,21 @@ static Expr *primary(Parser *p);
 static Expr *primary_inner(Parser *p);
 static Expr *array_literal(Parser *p);
 
-/* Guard-rail contro lo stack overflow del parser. La discesa ricorsiva usa lo
- * stack del C: un input pensato apposta, come 5000 parentesi aperte o 5000 '['
- * annidate, lo farebbe esplodere (crash secco). Oltre questo limite diamo un
- * errore di sintassi controllato.
+/* Guard-rail contro lo stack overflow. Protegge da DUE forme di espressione
+ * troppo profonda, entrambe capaci di far esplodere lo stack del C:
  *
- * NB: e' un contatore della PROFONDITA' della ricorsione, non esattamente dei
- * livelli di annidamento visibili: alcuni costrutti (es. un '[' o una '(')
- * attraversano sia unary() sia primary() e quindi "contano doppio". In pratica
- * il limite corrisponde a qualche centinaio di livelli annidati: infinitamente
- * piu' di qualunque codice reale, e ben sotto la soglia di crash. */
+ *  1) ANNIDAMENTO: 5000 parentesi o '[' annidati -> la discesa ricorsiva
+ *     (primary/unary) esplode gia' durante il PARSING.
+ *  2) CATENE lunghe: 1+1+1+...+1 con migliaia di termini. Il parser le
+ *     costruisce in modo iterativo (i while qui sotto), ma producono un albero
+ *     profondo che poi esplode altrove: nell'evaluator (ricorsivo) e persino
+ *     in ast_free (che libera l'albero in modo ricorsivo).
+ *
+ * Un unico contatore, p->depth, misura la complessita' dell'espressione
+ * corrente: lo incrementano sia i wrapper primary/unary (annidamento) sia i
+ * cicli delle catene binarie/logiche (un colpo per operatore). Viene azzerato
+ * a ogni istruzione (vedi statement). Oltre il limite: errore controllato.
+ * 1000 e' enorme per qualunque codice reale, e ben sotto la soglia di crash. */
 #define MAX_PARSE_DEPTH 1000
 
 static int too_deep(Parser *p) {
@@ -149,6 +154,8 @@ static Expr *assignment(Parser *p) {
 static Expr *logic_or(Parser *p) {
     Expr *left = logic_and(p);
     while (check(p, TOKEN_OR)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = logic_and(p);
@@ -162,6 +169,8 @@ static Expr *logic_or(Parser *p) {
 static Expr *logic_and(Parser *p) {
     Expr *left = equality(p);
     while (check(p, TOKEN_AND)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = equality(p);
@@ -173,6 +182,8 @@ static Expr *logic_and(Parser *p) {
 static Expr *equality(Parser *p) {
     Expr *left = comparison(p);
     while (check(p, TOKEN_EQ) || check(p, TOKEN_NEQ)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = comparison(p);
@@ -185,6 +196,8 @@ static Expr *comparison(Parser *p) {
     Expr *left = term(p);
     while (check(p, TOKEN_LT) || check(p, TOKEN_LE) ||
            check(p, TOKEN_GT) || check(p, TOKEN_GE)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = term(p);
@@ -196,6 +209,8 @@ static Expr *comparison(Parser *p) {
 static Expr *term(Parser *p) {
     Expr *left = factor(p);
     while (check(p, TOKEN_PLUS) || check(p, TOKEN_MINUS)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = factor(p);
@@ -207,6 +222,8 @@ static Expr *term(Parser *p) {
 static Expr *factor(Parser *p) {
     Expr *left = unary(p);
     while (check(p, TOKEN_STAR) || check(p, TOKEN_SLASH) || check(p, TOKEN_PERCENT)) {
+        if (too_deep(p)) break;
+        p->depth++;
         TokenType op = p->current.type;
         advance(p);
         Expr *right = unary(p);
@@ -366,6 +383,10 @@ static Stmt *for_statement(Parser *p);
 /* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt | forStmt |
  *              returnStmt | block | exprStmt */
 static Stmt *statement(Parser *p) {
+    /* Ogni istruzione riparte con un "budget" di profondita' fresco: il
+     * contatore p->depth serve a limitare la complessita' di UNA espressione
+     * (vedi too_deep e le catene binarie), non a sommarsi tra istruzioni. */
+    p->depth = 0;
     if (match(p, TOKEN_FUN))    return fun_declaration(p);
     if (match(p, TOKEN_VAR))    return var_declaration(p);
     if (match(p, TOKEN_PRINT))  return print_statement(p);
