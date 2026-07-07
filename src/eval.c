@@ -272,7 +272,10 @@ static Value native_num(Interp *it, int argc, Value *args) {
     char *end;
     double d = strtod(s, &end);
     while (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r') end++;
-    if (end == s || *end != '\0') {
+    /* end==s: non ha letto niente.  *end!='\0': avanzi non numerici dopo il numero.
+     * !isfinite: rifiutiamo "nan", "inf" e i valori troppo grandi (che strtod
+     * accetterebbe ma sarebbero un tranello: inquinerebbero i conti in silenzio). */
+    if (end == s || *end != '\0' || !isfinite(d)) {
         runtime_error(it, "num(): la stringa non e' un numero valido.");
         return value_number(0);
     }

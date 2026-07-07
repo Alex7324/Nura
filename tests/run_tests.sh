@@ -221,6 +221,8 @@ check "str di array annidato" 'print str([1,"x",[2,3]]);'            '[1, "x", [
 check "num da stringa"       'print num("42") + 1;'                  "43"
 check "num con spazi"        'print num("  10  ");'                  "10"
 check "num non valido"       'print num("ciao");'   "Errore a runtime: num(): la stringa non e' un numero valido."
+check "num rifiuta nan"      'print num("nan");'    "Errore a runtime: num(): la stringa non e' un numero valido."
+check "num rifiuta inf"      'print num("inf");'    "Errore a runtime: num(): la stringa non e' un numero valido."
 check "int tronca verso zero" "print int(2.9); print int(-2.9); print int(7/2);" "2
 -2
 3"
