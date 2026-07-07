@@ -20,6 +20,7 @@ static char *dup_lexeme(const char *start, int length) {
 static void error_at(Parser *p, Token token, const char *message) {
     if (p->had_error) return;
     p->had_error = 1;
+    fflush(stdout);   /* output del programma prima dell'errore (vedi runtime_error) */
     fprintf(stderr, "[riga %d] Errore di sintassi", token.line);
     if (token.type == TOKEN_EOF) {
         fprintf(stderr, " a fine input");

@@ -140,7 +140,9 @@ TROPPI="$(printf '[%.0s' $(seq 1 1200))"
 check "annidamento eccessivo"      "print ${TROPPI}1;" "[riga 1] Errore di sintassi vicino a '[': espressione troppo annidata."
 # Catena binaria lunghissima: parser iterativo, ma albero profondo. Deve dare
 # errore controllato, NON crashare (ne' in eval ne' in ast_free).
-CATENA="$(python -c "print('+'.join(['1']*3000))" 2>/dev/null || printf '1%.0s+1' $(seq 1 1500))"
+# Catena "1+1+1+...+1" (3001 termini). Generazione portabile (solo printf/seq,
+# niente python: su alcuni sistemi e' 'python3'), cosi' l'input e' identico ovunque.
+CATENA="1$(printf '+1%.0s' $(seq 1 3000))"
 check "catena binaria lunga"       "print ${CATENA};" "[riga 1] Errore di sintassi vicino a '1': espressione troppo annidata."
 check "catena corta ok"            "print 1+1+1+1+1+1+1+1;" "8"
 

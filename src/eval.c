@@ -75,6 +75,11 @@ static Obj *value_obj(Value v) {
 static void runtime_error(Interp *it, const char *message) {
     if (it->had_error) return;
     it->had_error = 1;
+    /* Svuoto stdout PRIMA di scrivere l'errore su stderr: cosi' l'output gia'
+     * stampato dal programma (le print) appare prima del messaggio d'errore,
+     * anche quando l'output e' rediretto in un file o in una pipe (dove stdout
+     * e' bufferizzato e altrimenti uscirebbe dopo). */
+    fflush(stdout);
     fprintf(stderr, "Errore a runtime: %s\n", message);
 }
 
