@@ -235,6 +235,15 @@ check "no scrittura su stringa" 'var s="ab"; s[0]="z";' "Errore a runtime: si pu
 check "rand in [0,1)"        "print rand() >= 0 && rand() < 1;"  "true"
 check "dado con rand+int"    "var d = int(rand()*6)+1; print d >= 1 && d <= 6;" "true"
 
+echo "== Escape nelle stringhe (\\n \\t \\\" ...) =="
+# NB: il doppio backslash \\ va provato da file (Git Bash lo mangia in -e).
+check "escape a-capo"        'print "a\nb";'         "a
+b"
+check "escape tab (len)"     'print len("x\ty");'    "3"
+check "escape virgolette"    'print "d\"x\"e";'      'd"x"e'
+check "escape a-capo conta 1" 'print len("a\nb");'   "3"
+check "escape sconosciuto"   'print "z\qw";'         "[riga 1] Errore di sintassi vicino a 'z\qw': sequenza di escape sconosciuta '\q'."
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."

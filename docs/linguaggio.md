@@ -93,6 +93,14 @@ Testo tra virgolette doppie. Si concatenano con `+`.
 print "ciao";
 print "Hello, " + "world!";   // Hello, world!
 ```
+Dentro una stringa puoi usare le **sequenze di escape**: `\n` (a-capo), `\t`
+(tabulazione), `\"` (virgoletta), `\\` (backslash), `\r` (ritorno carrello).
+```
+print "riga 1\nriga 2";        // due righe
+print "dice \"ciao\"";         // dice "ciao"
+print "percorso: c:\\dati";    // percorso: c:\dati
+```
+Una sequenza di escape sconosciuta (es. `\q`) è un errore di sintassi.
 Puoi leggere un **carattere** per indice, come per gli array (parte da `0`); il
 risultato è una stringa di un carattere. La lunghezza si ottiene con `len`.
 ```

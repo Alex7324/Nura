@@ -139,8 +139,17 @@ static Token number(Lexer *lexer) {
 static Token string(Lexer *lexer) {
     const char *content_start = lexer->current;
     while (peek(lexer) != '"' && !is_at_end(lexer)) {
-        if (peek(lexer) == '\n') lexer->line++;   /* stringhe su piu' righe */
+        char cc = peek(lexer);
+        if (cc == '\n') lexer->line++;   /* stringhe su piu' righe */
         advance(lexer);
+        /* Se c'e' un backslash, "salto" anche il carattere dopo, cosi' \" NON
+         * chiude la stringa e \\ non confonde. La traduzione vera degli escape
+         * (\n -> a-capo, ecc.) la fa il parser: qui il token resta il testo
+         * grezzo (col backslash), come punta nel sorgente. */
+        if (cc == '\\' && !is_at_end(lexer)) {
+            if (peek(lexer) == '\n') lexer->line++;
+            advance(lexer);   /* consuma il carattere protetto (anche se e' ") */
+        }
     }
     if (is_at_end(lexer)) {
         return error_token(lexer, "Stringa non chiusa: manca la '\"' finale.");

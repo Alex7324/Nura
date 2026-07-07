@@ -103,6 +103,39 @@ static int too_deep(Parser *p) {
     return 0;
 }
 
+/* Traduce le sequenze di escape di una stringa (\n, \t, \r, \", \\) nei byte
+ * veri. `src`/`len` sono il testo GREZZO del token (col backslash, cosi' come
+ * punta nel sorgente). Ritorna un buffer nuovo (che il chiamante liberera') e
+ * ne scrive la lunghezza in *out_len. Il risultato non e' mai piu' lungo
+ * dell'originale, perche' ogni escape (2 caratteri) diventa 1 byte. */
+static char *process_escapes(Parser *p, const char *src, int len, int *out_len) {
+    char *out = malloc((size_t)len + 1);
+    if (out == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    int j = 0;
+    for (int i = 0; i < len; i++) {
+        if (src[i] != '\\' || i + 1 >= len) {
+            out[j++] = src[i];
+            continue;
+        }
+        char e = src[i + 1];
+        i++;   /* consumo anche il carattere dopo il backslash */
+        if      (e == 'n')  out[j++] = '\n';
+        else if (e == 't')  out[j++] = '\t';
+        else if (e == 'r')  out[j++] = '\r';
+        else if (e == '"')  out[j++] = '"';
+        else if (e == '\\') out[j++] = '\\';
+        else {
+            char msg[64];
+            snprintf(msg, sizeof(msg), "sequenza di escape sconosciuta '\\%c'.", e);
+            error_at(p, p->current, msg);
+            out[j++] = e;   /* fallback: tengo solo il carattere */
+        }
+    }
+    out[j] = '\0';
+    *out_len = j;
+    return out;
+}
+
 /* expression -> assignment  (l'assegnamento e' l'operazione piu' debole) */
 static Expr *expression(Parser *p) {
     return assignment(p);
@@ -334,7 +367,10 @@ static Expr *primary_inner(Parser *p) {
     }
 
     if (check(p, TOKEN_STRING)) {
-        Expr *s = ast_string(p->current.start, p->current.length);
+        int outlen;
+        char *processed = process_escapes(p, p->current.start, p->current.length, &outlen);
+        Expr *s = ast_string(processed, outlen);   /* ast_string ne fa la sua copia */
+        free(processed);
         advance(p);
         return s;
     }
