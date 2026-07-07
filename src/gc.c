@@ -52,7 +52,9 @@ static int   g_temp_cap = 0;
 
 void gc_push_temp(Obj *o) {
     if (g_temp_count == g_temp_cap) {
-        int nc = g_temp_cap < 8 ? 8 : g_temp_cap * 2;
+        int nc;
+        if (g_temp_cap < 8) nc = 8;
+        else                nc = g_temp_cap * 2;
         Obj **grown = realloc(g_temp, sizeof(Obj *) * (size_t)nc);
         if (grown == NULL) { fprintf(stderr, "Memoria esaurita (GC).\n"); exit(1); }
         g_temp = grown;
@@ -160,7 +162,9 @@ void gc_mark_object(Obj *o) {
     o->marked = 1;
 
     if (g_gray_count == g_gray_cap) {
-        int new_cap = g_gray_cap < 8 ? 8 : g_gray_cap * 2;
+        int new_cap;
+        if (g_gray_cap < 8) new_cap = 8;
+        else                new_cap = g_gray_cap * 2;
         Obj **grown = realloc(g_gray, sizeof(Obj *) * (size_t)new_cap);
         if (grown == NULL) { fprintf(stderr, "Memoria esaurita (GC).\n"); exit(1); }
         g_gray = grown;

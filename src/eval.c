@@ -105,9 +105,12 @@ static int valid_index(Interp *it, Value idx_v, int count, const char *what, int
     /* Limiti controllati sul double (non ancora convertito): dopo questo controllo
      * sappiamo che 0 <= d < count <= INT_MAX, quindi il cast a int e' sicuro. */
     if (d < 0 || d >= count) {
+        const char *suffisso;
+        if (count == 1) suffisso = "o";   /* 1 elemento */
+        else            suffisso = "i";   /* N elementi */
         snprintf(msg, sizeof(msg),
                  "indice %.0f fuori dai limiti: %s ha %d element%s.",
-                 d, what, count, count == 1 ? "o" : "i");
+                 d, what, count, suffisso);
         runtime_error(it, msg);
         return 0;
     }
@@ -191,7 +194,9 @@ static Value native_pop(Interp *it, int argc, Value *args) {
 static void sb_append(char **buf, int *len, int *cap, const char *s) {
     int slen = (int)strlen(s);
     if (*len + slen + 1 > *cap) {
-        int nc = (*cap < 32) ? 32 : *cap;
+        int nc;
+        if (*cap < 32) nc = 32;
+        else           nc = *cap;
         while (nc < *len + slen + 1) nc *= 2;
         char *g = realloc(*buf, (size_t)nc);
         if (g == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
@@ -214,7 +219,10 @@ static void stringify(Value v, char **buf, int *len, int *cap, int depth) {
             sb_append(buf, len, cap, tmp);
             break;
         }
-        case VAL_BOOL:     sb_append(buf, len, cap, v.as.boolean ? "true" : "false"); break;
+        case VAL_BOOL:
+            if (v.as.boolean) sb_append(buf, len, cap, "true");
+            else              sb_append(buf, len, cap, "false");
+            break;
         case VAL_STRING:   sb_append(buf, len, cap, v.as.string->chars); break;
         case VAL_FUNCTION: sb_append(buf, len, cap, "<funzione>"); break;
         case VAL_NATIVE:
@@ -245,7 +253,10 @@ static Value native_str(Interp *it, int argc, Value *args) {
     (void)it; (void)argc;
     char *buf = NULL; int len = 0, cap = 0;
     stringify(args[0], &buf, &len, &cap, 0);
-    ObjString *s = gc_new_string(buf ? buf : "", len);
+    const char *chars;
+    if (buf != NULL) chars = buf;   /* buf e' NULL se stringify non ha scritto nulla */
+    else             chars = "";
+    ObjString *s = gc_new_string(chars, len);
     free(buf);
     return value_string(s);
 }
@@ -462,8 +473,11 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
                     runtime_error(it, msg);
                     return value_number(0);
                 }
-                Value *args = (argc > 0) ? malloc(sizeof(Value) * (size_t)argc) : NULL;
-                if (argc > 0 && args == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                Value *args = NULL;
+                if (argc > 0) {
+                    args = malloc(sizeof(Value) * (size_t)argc);
+                    if (args == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                }
                 int pushed = 0;
                 for (int i = 0; i < argc; i++) {
                     args[i] = evaluate(expr->as.call.args[i], it);

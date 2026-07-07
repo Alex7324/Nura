@@ -205,7 +205,10 @@ static Value n_eval(Expr *e, Env *env) {
 
         case EXPR_ARRAY: {
             int c = e->as.array.count;
-            ind(); printf("costruisco un array di %d element%s\n", c, c == 1 ? "o" : "i");
+            const char *suff;
+            if (c == 1) suff = "o";
+            else        suff = "i";
+            ind(); printf("costruisco un array di %d element%s\n", c, suff);
             Array *arr = array_new();   /* leak ok per il tool */
             for (int i = 0; i < c; i++) {
                 depth++;
