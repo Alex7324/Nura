@@ -1,0 +1,35 @@
+// Crivello di Eratostene: trova tutti i numeri primi fino a un limite.
+// Idea: parti da "tutti primi", poi cancella i multipli di ogni primo trovato.
+// Esegui con:  nura examples/algoritmi/crivello.nura
+
+fun primiFinoA(limite) {
+    // primo[i] = true finche' non scopriamo che i e' composto
+    var primo = [];
+    for (var i = 0; i <= limite; i = i + 1) {
+        push(primo, true);
+    }
+    primo[0] = false;
+    primo[1] = false;
+
+    for (var p = 2; p * p <= limite; p = p + 1) {
+        if (primo[p]) {
+            // cancella i multipli di p, partendo da p*p
+            for (var m = p * p; m <= limite; m = m + p) {
+                primo[m] = false;
+            }
+        }
+    }
+
+    // raccogli i numeri rimasti "primi"
+    var out = [];
+    for (var i = 2; i <= limite; i = i + 1) {
+        if (primo[i]) {
+            push(out, i);
+        }
+    }
+    return out;
+}
+
+var primi = primiFinoA(50);
+print "Primi fino a 50: " + str(primi);
+print "Quanti sono:     " + str(len(primi));

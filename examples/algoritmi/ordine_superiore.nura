@@ -1,0 +1,38 @@
+// Funzioni di ordine superiore in Nura:
+// funzioni che prendono altre funzioni come argomento, o che le restituiscono.
+// Esegui con:  nura examples/algoritmi/ordine_superiore.nura
+
+// --- Currying: add(3) restituisce una funzione che aggiunge 3 ---
+fun add(x) {
+    fun inner(y) { return x + y; }   // 'inner' cattura x (closure)
+    return inner;
+}
+var add5 = add(5);
+print "add(3)(4) = " + str(add(3)(4));   // 7
+print "add5(10)  = " + str(add5(10));    // 15
+
+// --- reduce: "riduce" un array a un solo valore, applicando una funzione ---
+fun riduci(a, iniziale, f) {
+    var acc = iniziale;
+    for (var i = 0; i < len(a); i = i + 1) {
+        acc = f(acc, a[i]);
+    }
+    return acc;
+}
+fun somma(x, y)   { return x + y; }
+fun massimo(x, y) { if (x > y) { return x; } return y; }
+
+var dati = [4, 8, 2, 9, 5, 1];
+print "somma  di " + str(dati) + " = " + str(riduci(dati, 0, somma));       // 29
+print "massimo di " + str(dati) + " = " + str(riduci(dati, dati[0], massimo)); // 9
+
+// --- map: applica una funzione a ogni elemento, costruendo un nuovo array ---
+fun mappa(a, f) {
+    var out = [];
+    for (var i = 0; i < len(a); i = i + 1) {
+        push(out, f(a[i]));
+    }
+    return out;
+}
+fun quadrato(x) { return x * x; }
+print "quadrati di [1,2,3,4] = " + str(mappa([1, 2, 3, 4], quadrato));      // [1, 4, 9, 16]

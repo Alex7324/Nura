@@ -1,0 +1,44 @@
+// Algoritmi ricorsivi classici in Nura.
+// Esegui con:  nura examples/algoritmi/ricorsione.nura
+
+// Fibonacci: F(n) = F(n-1) + F(n-2)
+fun fib(n) {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+
+// Fattoriale: n! = n * (n-1)!
+fun fattoriale(n) {
+    if (n <= 1) { return 1; }
+    return n * fattoriale(n - 1);
+}
+
+// Massimo comun divisore (algoritmo di Euclide).
+fun gcd(a, b) {
+    if (b == 0) { return a; }
+    return gcd(b, a % b);
+}
+
+// Funzione di Ackermann: cresce vertiginosamente, ottima per la ricorsione pesante.
+fun ackermann(m, n) {
+    if (m == 0) { return n + 1; }
+    if (n == 0) { return ackermann(m - 1, 1); }
+    return ackermann(m - 1, ackermann(m, n - 1));
+}
+
+// Congettura di Collatz: quanti passi servono per arrivare a 1?
+fun collatz(n) {
+    var passi = 0;
+    while (n != 1) {
+        if (n % 2 == 0) { n = n / 2; }
+        else            { n = 3 * n + 1; }
+        passi = passi + 1;
+    }
+    return passi;
+}
+
+print "fib(15)         = " + str(fib(15));                    // 610
+print "fattoriale(6)   = " + str(fattoriale(6));              // 720
+print "gcd(48, 36)     = " + str(gcd(48, 36));                // 12
+print "ackermann(3, 3) = " + str(ackermann(3, 3));            // 61
+print "collatz(27)     = " + str(collatz(27)) + " passi";     // 111

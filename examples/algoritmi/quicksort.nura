@@ -1,0 +1,37 @@
+// Quicksort "sul posto" (in-place) in Nura.
+// Ordina l'array modificandolo direttamente (per riferimento), senza copiarlo.
+// Esegui con:  nura examples/algoritmi/quicksort.nura
+
+// scambia due elementi dell'array
+fun swap(a, i, j) {
+    var t = a[i];
+    a[i] = a[j];
+    a[j] = t;
+}
+
+// mette il pivot (l'ultimo elemento) al suo posto; a sinistra i minori, a destra i maggiori.
+fun partition(a, lo, hi) {
+    var pivot = a[hi];
+    var i = lo - 1;
+    for (var j = lo; j < hi; j = j + 1) {
+        if (a[j] <= pivot) {
+            i = i + 1;
+            swap(a, i, j);
+        }
+    }
+    swap(a, i + 1, hi);
+    return i + 1;                 // posizione finale del pivot
+}
+
+fun quicksort(a, lo, hi) {
+    if (lo < hi) {
+        var p = partition(a, lo, hi);
+        quicksort(a, lo, p - 1);      // ordina la parte sinistra
+        quicksort(a, p + 1, hi);      // ordina la parte destra
+    }
+}
+
+var numeri = [3, 6, 1, 8, 2, 9, 4, 0, 5, 7];
+print "Prima:  " + str(numeri);
+quicksort(numeri, 0, len(numeri) - 1);
+print "Dopo:   " + str(numeri);

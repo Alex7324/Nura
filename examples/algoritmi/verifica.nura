@@ -1,0 +1,118 @@
+// Suite di algoritmi AUTO-VERIFICANTE.
+// Ogni algoritmo ha un risultato noto: il programma stampa OK/FAIL da solo.
+// (Gli array si confrontano via str(), che ne da' la forma testuale.)
+// Esegui con:  nura examples/algoritmi/verifica.nura
+
+fun assert(nome, got, atteso) {
+    if (str(got) == str(atteso)) {
+        print "OK   " + nome;
+    } else {
+        print "FAIL " + nome + ": ho " + str(got) + ", atteso " + str(atteso);
+    }
+}
+
+// --- ricorsione ---
+fun fib(n) { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }
+assert("fib(15)", fib(15), 610);
+
+fun fatt(n) { if (n <= 1) { return 1; } return n * fatt(n - 1); }
+assert("fatt(6)", fatt(6), 720);
+
+fun gcd(a, b) { if (b == 0) { return a; } return gcd(b, a % b); }
+assert("gcd(48,36)", gcd(48, 36), 12);
+
+fun ack(m, n) {
+    if (m == 0) { return n + 1; }
+    if (n == 0) { return ack(m - 1, 1); }
+    return ack(m - 1, ack(m, n - 1));
+}
+assert("ack(3,3)", ack(3, 3), 61);
+
+fun collatz(n) {
+    var passi = 0;
+    while (n != 1) {
+        if (n % 2 == 0) { n = n / 2; } else { n = 3 * n + 1; }
+        passi = passi + 1;
+    }
+    return passi;
+}
+assert("collatz(27)", collatz(27), 111);
+
+// --- quicksort in-place ---
+fun swap(a, i, j) { var t = a[i]; a[i] = a[j]; a[j] = t; }
+fun partition(a, lo, hi) {
+    var pivot = a[hi];
+    var i = lo - 1;
+    for (var j = lo; j < hi; j = j + 1) {
+        if (a[j] <= pivot) { i = i + 1; swap(a, i, j); }
+    }
+    swap(a, i + 1, hi);
+    return i + 1;
+}
+fun quicksort(a, lo, hi) {
+    if (lo < hi) {
+        var p = partition(a, lo, hi);
+        quicksort(a, lo, p - 1);
+        quicksort(a, p + 1, hi);
+    }
+}
+var arr = [3, 6, 1, 8, 2, 9, 4, 0, 5, 7];
+quicksort(arr, 0, len(arr) - 1);
+assert("quicksort", arr, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+// --- crivello ---
+fun sieve(limite) {
+    var primo = [];
+    for (var i = 0; i <= limite; i = i + 1) { push(primo, true); }
+    primo[0] = false; primo[1] = false;
+    for (var p = 2; p * p <= limite; p = p + 1) {
+        if (primo[p]) {
+            for (var m = p * p; m <= limite; m = m + p) { primo[m] = false; }
+        }
+    }
+    var out = [];
+    for (var i = 2; i <= limite; i = i + 1) { if (primo[i]) { push(out, i); } }
+    return out;
+}
+assert("sieve(30)", sieve(30), [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]);
+
+// --- matrice: somma della diagonale ---
+fun diagSum(m) {
+    var s = 0;
+    for (var i = 0; i < len(m); i = i + 1) { s = s + m[i][i]; }
+    return s;
+}
+assert("diagSum 3x3", diagSum([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 15);
+
+// --- stringhe ---
+fun reverse(s) {
+    var out = "";
+    for (var i = len(s) - 1; i >= 0; i = i - 1) { out = out + s[i]; }
+    return out;
+}
+assert("reverse ciao", reverse("ciao"), "oaic");
+
+fun palindromo(s) {
+    var i = 0; var j = len(s) - 1;
+    while (i < j) {
+        if (s[i] != s[j]) { return false; }
+        i = i + 1; j = j - 1;
+    }
+    return true;
+}
+assert("palindromo anna", palindromo("anna"), true);
+assert("palindromo casa", palindromo("casa"), false);
+
+// --- ordine superiore ---
+fun add(x) { fun inner(y) { return x + y; } return inner; }
+assert("curry add(3)(4)", add(3)(4), 7);
+
+fun riduci(a, iniziale, f) {
+    var acc = iniziale;
+    for (var i = 0; i < len(a); i = i + 1) { acc = f(acc, a[i]); }
+    return acc;
+}
+fun somma(x, y) { return x + y; }
+assert("riduci somma", riduci([1, 2, 3, 4, 5], 0, somma), 15);
+
+print "--- fine ---";
