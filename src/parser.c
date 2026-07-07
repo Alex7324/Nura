@@ -418,10 +418,31 @@ static Stmt *while_statement(Parser *p);
 static Stmt *for_statement(Parser *p);
 static Stmt *break_statement(Parser *p);
 static Stmt *continue_statement(Parser *p);
+static Stmt *statement_inner(Parser *p);
+
+/* Limite all'ANNIDAMENTO delle istruzioni ({ { ... } }, if dentro if, ecc.).
+ * Come per le espressioni, la discesa ricorsiva del parser usa lo stack del C:
+ * senza questo limite, migliaia di blocchi/if annidati lo farebbero esplodere
+ * (crash secco) PRIMA che l'evaluator possa fermarli. Largo per qualunque
+ * codice reale (nessuno annida istruzioni 1000 volte). */
+#define MAX_STMT_DEPTH 1000
+
+/* Wrapper con guard-rail sulla profondita' di annidamento delle istruzioni.
+ * Il lavoro vero e' in statement_inner. */
+static Stmt *statement(Parser *p) {
+    if (p->stmt_depth >= MAX_STMT_DEPTH) {
+        error_at(p, p->current, "troppe istruzioni annidate.");
+        return stmt_expr(ast_number(0));   /* segnaposto: had_error ferma il parsing */
+    }
+    p->stmt_depth++;
+    Stmt *s = statement_inner(p);
+    p->stmt_depth--;
+    return s;
+}
 
 /* statement -> funDecl | varDecl | printStmt | ifStmt | whileStmt | forStmt |
  *              returnStmt | block | exprStmt */
-static Stmt *statement(Parser *p) {
+static Stmt *statement_inner(Parser *p) {
     /* Ogni istruzione riparte con un "budget" di profondita' fresco: il
      * contatore p->depth serve a limitare la complessita' di UNA espressione
      * (vedi too_deep e le catene binarie), non a sommarsi tra istruzioni. */
@@ -619,6 +640,7 @@ Expr *parse_expression_source(const char *source, int *had_error) {
     parser.had_error = 0;
     parser.depth = 0;
     parser.loop_depth = 0;
+    parser.stmt_depth = 0;
     advance(&parser);
     Expr *tree = expression(&parser);
     consume(&parser, TOKEN_EOF, "Testo in piu' dopo l'espressione.");
@@ -633,6 +655,7 @@ void parse_program(const char *source, Program *program, int *had_error) {
     parser.had_error = 0;
     parser.depth = 0;
     parser.loop_depth = 0;
+    parser.stmt_depth = 0;
     advance(&parser);            /* primer */
 
     program_init(program);

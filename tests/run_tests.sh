@@ -138,6 +138,10 @@ check "array ciclico non crasha"   "var a=[1]; a[0]=a; print a;" "$CICLICO"
 # Annidamento sintattico eccessivo: errore controllato, niente stack overflow.
 TROPPI="$(printf '[%.0s' $(seq 1 1200))"
 check "annidamento eccessivo"      "print ${TROPPI}1;" "[riga 1] Errore di sintassi vicino a '[': espressione troppo annidata."
+# Istruzioni annidate all'eccesso ({ { { ... } } }): il parser deve fermarsi con
+# un errore, NON crashare (lo stack overflow che avevamo trovato coi test pesanti).
+BLOCCHI="$(printf '{%.0s' $(seq 1 1100))"
+check "istruzioni troppo annidate" "${BLOCCHI}print 1;" "[riga 1] Errore di sintassi vicino a '{': troppe istruzioni annidate."
 # Catena binaria lunghissima: parser iterativo, ma albero profondo. Deve dare
 # errore controllato, NON crashare (ne' in eval ne' in ast_free).
 # Catena "1+1+1+...+1" (3001 termini). Generazione portabile (solo printf/seq,

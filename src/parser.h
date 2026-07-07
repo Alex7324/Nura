@@ -16,6 +16,8 @@ typedef struct {
     int loop_depth;   /* quanti cicli racchiudono il punto corrente: serve a
                        * rilevare 'break'/'continue' fuori da un ciclo. Viene
                        * azzerato entrando nel corpo di una funzione. */
+    int stmt_depth;   /* annidamento delle istruzioni ({..}, if in if...):
+                       * guard-rail contro lo stack overflow del parser. */
 } Parser;
 
 /* (Fasi 1-3) Analizza UNA espressione e ne ritorna l'albero.
