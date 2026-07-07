@@ -81,42 +81,33 @@ static void runtime_error(Interp *it, const char *message) {
 /* Valida un accesso arr[i]: controlla che arr_v sia un array, che idx_v sia
  * un numero e che l'indice sia dentro i limiti. Se tutto ok, scrive l'indice
  * intero in *out e ritorna 1; altrimenti segnala l'errore e ritorna 0. */
-static int check_index(Interp *it, Value arr_v, Value idx_v, int *out) {
+/* Verifica che idx_v sia un indice valido per un contenitore di `count` elementi
+ * (array O stringa): un numero INTERO e finito, dentro [0, count). Se ok, scrive
+ * l'indice in *out e ritorna 1; altrimenti segnala l'errore (usando `what`, es.
+ * "l'array" / "la stringa") e ritorna 0. */
+static int valid_index(Interp *it, Value idx_v, int count, const char *what, int *out) {
     char msg[160];
-    if (arr_v.type != VAL_ARRAY) {
-        snprintf(msg, sizeof(msg), "si puo' indicizzare solo un array, non un %s.",
-                 value_type_name(arr_v.type));
-        runtime_error(it, msg);
-        return 0;
-    }
     if (idx_v.type != VAL_NUMBER) {
-        snprintf(msg, sizeof(msg), "l'indice di un array deve essere un numero, non un %s.",
+        snprintf(msg, sizeof(msg), "l'indice deve essere un numero, non un valore di tipo %s.",
                  value_type_name(idx_v.type));
         runtime_error(it, msg);
         return 0;
     }
-    /* L'indice deve essere un numero INTERO e finito. Rifiutiamo qui i decimali
-     * (arr[1.9]), i NaN e gli infiniti: floor/isfinite li intercettano. Cosi'
-     * evitiamo anche il cast a int di valori enormi (che sarebbe undefined
-     * behavior in C, e prima dava messaggi assurdi tipo "indice -2147483648"). */
+    /* L'indice deve essere INTERO e finito. Rifiutiamo i decimali (a[1.9]), i NaN
+     * e gli infiniti (floor/isfinite li intercettano), evitando anche il cast a
+     * int di valori enormi (undefined behavior in C). */
     double d = idx_v.as.number;
     if (!isfinite(d) || d != floor(d)) {
-        snprintf(msg, sizeof(msg),
-                 "l'indice di un array deve essere un numero intero, non %g.", d);
+        snprintf(msg, sizeof(msg), "l'indice deve essere un numero intero, non %g.", d);
         runtime_error(it, msg);
         return 0;
     }
-    Array *arr = arr_v.as.array;
-    /* Controllo dei limiti fatto sul double (non ancora convertito): se d e'
-     * fuori da [0, count) segnaliamo l'errore usando %g, che stampa bene anche
-     * i numeri grandissimi. Dopo questo controllo sappiamo che 0 <= d < count
-     * <= INT_MAX, quindi il cast a int qui sotto e' sicuro. */
-    if (d < 0 || d >= arr->count) {
-        /* %.0f (non %g): d e' un intero, lo vogliamo per esteso (2147483648),
-         * non in notazione scientifica (2.14748e+09). */
+    /* Limiti controllati sul double (non ancora convertito): dopo questo controllo
+     * sappiamo che 0 <= d < count <= INT_MAX, quindi il cast a int e' sicuro. */
+    if (d < 0 || d >= count) {
         snprintf(msg, sizeof(msg),
-                 "indice %.0f fuori dai limiti: l'array ha %d element%s.",
-                 d, arr->count, arr->count == 1 ? "o" : "i");
+                 "indice %.0f fuori dai limiti: %s ha %d element%s.",
+                 d, what, count, count == 1 ? "o" : "i");
         runtime_error(it, msg);
         return 0;
     }
@@ -293,13 +284,38 @@ static Value native_input(Interp *it, int argc, Value *args) {
     return value_string(gc_new_string(line, n));
 }
 
+/* int(x): la parte intera di un numero, verso lo zero (int(2.9)=2, int(-2.9)=-2).
+ * Comoda per gli indici di array, che devono essere interi: es. int((a+b)/2). */
+static Value native_int(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_NUMBER) {
+        runtime_error(it, "int() vuole un numero.");
+        return value_number(0);
+    }
+    return value_number(trunc(args[0].as.number));
+}
+
+/* rand(): un numero PSEUDOcasuale in [0, 1). Per un intero in [0, n) si usa
+ * int(rand() * n). E' "pseudo" perche' generato da una formula: sembra casuale
+ * ma e' deterministico dato il seme (che qui cambia a ogni avvio). */
+static Value native_rand(Interp *it, int argc, Value *args) {
+    (void)it; (void)argc; (void)args;
+    return value_number((double)rand() / ((double)RAND_MAX + 1.0));
+}
+
 /* Registra le native nell'ambiente globale, prima di eseguire il programma. */
 static void define_natives(Env *globals) {
+    /* Semino il generatore pseudocasuale una volta, mescolando orologio di
+     * sistema e tempo CPU: cosi' rand() da' una sequenza diversa a ogni avvio. */
+    srand((unsigned)time(NULL) ^ (unsigned)clock());
+
     env_define(globals, "len",   value_native("len",   native_len,   1));
     env_define(globals, "push",  value_native("push",  native_push,  2));
     env_define(globals, "pop",   value_native("pop",   native_pop,   1));
     env_define(globals, "str",   value_native("str",   native_str,   1));
     env_define(globals, "num",   value_native("num",   native_num,   1));
+    env_define(globals, "int",   value_native("int",   native_int,   1));
+    env_define(globals, "rand",  value_native("rand",  native_rand,  0));
     env_define(globals, "clock", value_native("clock", native_clock, 0));
     env_define(globals, "input", value_native("input", native_input, 0));
 }
@@ -543,8 +559,24 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
             if (it->had_error) return idx_v;
 
             int index;
-            if (!check_index(it, arr_v, idx_v, &index)) return value_number(0);
-            return arr_v.as.array->items[index];
+            /* Si possono indicizzare gli array E le stringhe. */
+            if (arr_v.type == VAL_ARRAY) {
+                if (!valid_index(it, idx_v, arr_v.as.array->count, "l'array", &index))
+                    return value_number(0);
+                return arr_v.as.array->items[index];
+            }
+            if (arr_v.type == VAL_STRING) {
+                if (!valid_index(it, idx_v, arr_v.as.string->length, "la stringa", &index))
+                    return value_number(0);
+                /* Nura non ha un tipo "carattere": il carattere e' una stringa di 1. */
+                return value_string(gc_new_string(&arr_v.as.string->chars[index], 1));
+            }
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                     "si puo' indicizzare solo un array o una stringa, non un valore di tipo %s.",
+                     value_type_name(arr_v.type));
+            runtime_error(it, msg);
+            return value_number(0);
         }
 
         case EXPR_INDEX_SET: {
@@ -557,11 +589,21 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
             gc_pop_temp(1);
             if (it->had_error) return val;
 
+            /* La scrittura per indice vale solo per gli array: le stringhe sono
+             * immutabili e condivise, non si modificano sul posto. */
+            if (arr_v.type != VAL_ARRAY) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "si puo' assegnare per indice solo a un array, non a un valore di tipo %s.",
+                         value_type_name(arr_v.type));
+                runtime_error(it, msg);
+                return value_number(0);
+            }
             int index;
-            if (!check_index(it, arr_v, idx_v, &index)) return value_number(0);
+            if (!valid_index(it, idx_v, arr_v.as.array->count, "l'array", &index))
+                return value_number(0);
             /* L'array e' condiviso: scrivere qui si vede da tutte le variabili
-             * che puntano allo stesso array. Non liberiamo il vecchio elemento:
-             * eventuali stringhe vivono altrove (AST/arena), non nell'array. */
+             * che puntano allo stesso array. */
             arr_v.as.array->items[index] = val;
             return val;   /* un assegnamento "vale" il valore assegnato */
         }

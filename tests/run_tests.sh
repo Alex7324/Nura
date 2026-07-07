@@ -124,11 +124,11 @@ check "somma su array"       "var a=[1,2,3]; var s=0; var i=0; while(i<3){ s=s+a
 check "indice fuori limiti"  "var a=[1,2]; print a[5];"    "Errore a runtime: indice 5 fuori dai limiti: l'array ha 2 elementi."
 check "un solo elemento"     "var a=[7]; print a[9];"      "Errore a runtime: indice 9 fuori dai limiti: l'array ha 1 elemento."
 check "indice negativo"      "var a=[1,2]; print a[-1];"   "Errore a runtime: indice -1 fuori dai limiti: l'array ha 2 elementi."
-check "indicizzo un numero"  "var n=3; print n[0];"        "Errore a runtime: si puo' indicizzare solo un array, non un numero."
-check "indice non numerico"  'var a=[1]; print a["x"];'    "Errore a runtime: l'indice di un array deve essere un numero, non un stringa."
+check "indicizzo un numero"  "var n=3; print n[0];"        "Errore a runtime: si puo' indicizzare solo un array o una stringa, non un valore di tipo numero."
+check "indice non numerico"  'var a=[1]; print a["x"];'    "Errore a runtime: l'indice deve essere un numero, non un valore di tipo stringa."
 
 echo "== Fase 7b: robustezza array (casi limite / anti-crash) =="
-check "indice deve essere intero" "var a=[1,2,3]; print a[2.9];"  "Errore a runtime: l'indice di un array deve essere un numero intero, non 2.9."
+check "indice deve essere intero" "var a=[1,2,3]; print a[2.9];"  "Errore a runtime: l'indice deve essere un numero intero, non 2.9."
 check "indice intero come 2.0 ok"  "var a=[1,2,3]; print a[2.0];" "3"
 check "indice enorme non e' UB"    "var a=[1]; print a[1000000000];" "Errore a runtime: indice 1000000000 fuori dai limiti: l'array ha 1 elemento."
 # Array ciclico (a contiene se stesso): la stampa NON deve andare in loop.
@@ -221,6 +221,17 @@ check "str di array annidato" 'print str([1,"x",[2,3]]);'            '[1, "x", [
 check "num da stringa"       'print num("42") + 1;'                  "43"
 check "num con spazi"        'print num("  10  ");'                  "10"
 check "num non valido"       'print num("ciao");'   "Errore a runtime: num(): la stringa non e' un numero valido."
+check "int tronca verso zero" "print int(2.9); print int(-2.9); print int(7/2);" "2
+-2
+3"
+check "int vuole un numero"  'int("x");'            "Errore a runtime: int() vuole un numero."
+check "indice stringa"       'var s="ciao"; print s[0]; print s[3];' "c
+o"
+check "indice stringa concat" 'print "abc"[1] + "abc"[2];'  "bc"
+check "indice stringa fuori"  'print "ab"[5];'      "Errore a runtime: indice 5 fuori dai limiti: la stringa ha 2 elementi."
+check "no scrittura su stringa" 'var s="ab"; s[0]="z";' "Errore a runtime: si puo' assegnare per indice solo a un array, non a un valore di tipo stringa."
+check "rand in [0,1)"        "print rand() >= 0 && rand() < 1;"  "true"
+check "dado con rand+int"    "var d = int(rand()*6)+1; print d >= 1 && d <= 6;" "true"
 
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."

@@ -1,0 +1,31 @@
+// Ricerca binaria (ricorsiva) in Nura
+// Cerca un valore in un array ORDINATO, dimezzando ogni volta lo spazio.
+// Ritorna l'indice del valore, oppure -1 se non c'e'.
+// Eseguilo con:  nura examples/ricerca_binaria.nura
+
+fun ricercaBinaria(a, valore, basso, alto) {
+    if (basso > alto) {
+        return -1;                       // spazio vuoto: non trovato
+    }
+    // (basso+alto)/2 puo' dare un decimale; int() ne prende la parte intera.
+    var mezzo = int((basso + alto) / 2);
+
+    if (a[mezzo] == valore) {
+        return mezzo;                    // trovato!
+    }
+    if (a[mezzo] < valore) {
+        return ricercaBinaria(a, valore, mezzo + 1, alto);   // cerca a destra
+    }
+    return ricercaBinaria(a, valore, basso, mezzo - 1);      // cerca a sinistra
+}
+
+// comodo "wrapper" che passa i limiti iniziali
+fun cerca(a, valore) {
+    return ricercaBinaria(a, valore, 0, len(a) - 1);
+}
+
+var ordinato = [1, 3, 4, 7, 9, 11, 15, 20, 25];
+print "Array:   " + str(ordinato);
+print "cerco 9  -> indice " + str(cerca(ordinato, 9));
+print "cerco 20 -> indice " + str(cerca(ordinato, 20));
+print "cerco 8  -> indice " + str(cerca(ordinato, 8));   // non c'e' -> -1

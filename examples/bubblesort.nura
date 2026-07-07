@@ -1,0 +1,31 @@
+// Bubble sort in Nura
+// Ordina un array facendo "risalire" a bolla i valori piu' grandi.
+// Eseguilo con:  nura examples/bubblesort.nura
+
+fun bubbleSort(a) {
+    var n = len(a);
+    // A ogni passata, il valore piu' grande "sale" fino in fondo.
+    for (var i = 0; i < n - 1; i = i + 1) {
+        var scambiato = false;
+        // Confronto coppie adiacenti; l'ultima parte e' gia' ordinata.
+        for (var j = 0; j < n - 1 - i; j = j + 1) {
+            if (a[j] > a[j + 1]) {
+                // scambio a[j] e a[j+1]
+                var tmp = a[j];
+                a[j] = a[j + 1];
+                a[j + 1] = tmp;
+                scambiato = true;
+            }
+        }
+        // Ottimizzazione: se in una passata non scambio nulla, e' gia' ordinato.
+        if (!scambiato) {
+            return a;
+        }
+    }
+    return a;
+}
+
+var numeri = [5, 2, 9, 1, 7, 3, 8, 4, 6];
+print "Prima:  " + str(numeri);
+bubbleSort(numeri);
+print "Dopo:   " + str(numeri);

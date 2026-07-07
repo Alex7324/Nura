@@ -93,6 +93,14 @@ Testo tra virgolette doppie. Si concatenano con `+`.
 print "ciao";
 print "Hello, " + "world!";   // Hello, world!
 ```
+Puoi leggere un **carattere** per indice, come per gli array (parte da `0`); il
+risultato è una stringa di un carattere. La lunghezza si ottiene con `len`.
+```
+var s = "ciao";
+print s[0];        // c
+print len(s);      // 4
+```
+Le stringhe sono **immutabili**: `s[0] = "x"` è un errore (non si modificano sul posto).
 
 ### Funzioni
 Anche le funzioni sono valori: puoi metterle in una variabile e restituirle
@@ -341,13 +349,24 @@ print fattoriale(5);         // 120
 > interrompe con un errore a runtime ("profondità massima superata") invece di
 > bloccarsi con uno *stack overflow*.
 
-### Funzioni native (`len`, `push`)
+### Funzioni native
 Alcune funzioni sono **già pronte**: sono scritte in C dentro l'interprete (si
 chiamano *native*), ma si usano come qualsiasi altra funzione.
 
-- **`len(x)`** — la lunghezza di un array o di una stringa.
-- **`push(arr, x)`** — aggiunge `x` in coda all'array `arr` (che così *cresce*) e
-  restituisce la nuova lunghezza. L'array è modificato sul posto (per riferimento).
+| Nativa | Cosa fa |
+|---|---|
+| `len(x)` | lunghezza di un array o di una stringa |
+| `push(arr, x)` | aggiunge `x` in coda all'array (che *cresce*); ritorna la nuova lunghezza |
+| `pop(arr)` | toglie e restituisce l'ultimo elemento |
+| `str(x)` | converte un valore in stringa (utile per concatenare: `"n=" + str(3)`) |
+| `num(s)` | converte una stringa in numero |
+| `int(x)` | parte intera di un numero, verso lo zero (`int(2.9)` = 2). Comoda per gli indici |
+| `rand()` | numero pseudocasuale in `[0, 1)`. Per un intero in `[0, n)`: `int(rand() * n)` |
+| `clock()` | secondi di CPU dall'avvio (per misurare) |
+| `input()` | legge una riga da tastiera come stringa |
+
+`push` modifica l'array sul posto (per riferimento). Un dado da 1 a 6:
+`int(rand() * 6) + 1`.
 
 ```
 var a = [];
