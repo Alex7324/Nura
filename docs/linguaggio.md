@@ -418,6 +418,26 @@ var d = contatore();
 print d();                   // 1   (contatore indipendente, con la sua n)
 ```
 
+> ⚠️ **Closure dentro un ciclo (una cosa da sapere).** La variabile di un `for`
+> vive in **un solo posto**, condiviso da tutti i giri. Se dentro il ciclo crei
+> delle funzioni che catturano quella variabile, catturano *tutte lo stesso*
+> valore — quello **finale**.
+> ```
+> var fs = [];
+> for (var i = 0; i < 3; i = i + 1) {
+>     fun g() { return i; }
+>     push(fs, g);
+> }
+> print fs[0]() + fs[1]() + fs[2]();   // 9  (cioè 3+3+3, NON 0+1+2)
+> ```
+> È lo stesso comportamento di **Python** e del vecchio `var` di JavaScript. Se
+> vuoi che ogni funzione "fotografi" il suo giro, avvolgila in una funzione che
+> ne copia il valore:
+> ```
+> fun cattura(v) { fun g() { return v; } return g; }   // v è una copia del giro
+> push(fs, cattura(i));                                // ora dà 0, 1, 2
+> ```
+
 ## 12. Errori
 
 Nura distingue due tipi di errore, entrambi stampati con il numero di riga quando
