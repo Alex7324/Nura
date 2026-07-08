@@ -90,7 +90,8 @@ typedef enum {
     STMT_BREAK,   /* break;                           */
     STMT_CONTINUE,/* continue;                        */
     STMT_FUN,     /* fun nome(params) { corpo }       */
-    STMT_RETURN   /* return expr;                     */
+    STMT_RETURN,  /* return expr;                     */
+    STMT_RECUR    /* recur chiamata;  (tail call, TCO) */
 } StmtType;
 
 struct Stmt {
@@ -106,6 +107,7 @@ struct Stmt {
         struct { Stmt *initializer; Expr *condition; Expr *increment; Stmt *body; } for_stmt;
         struct { char *name; char **params; int param_count; Stmt *body; } function;
         struct { Expr *value; } ret;   /* return: value puo' essere NULL */
+        struct { Expr *call; } recur;  /* recur: call e' sempre un EXPR_CALL */
     } as;
 };
 
@@ -120,6 +122,7 @@ Stmt *stmt_if(Expr *condition, Stmt *then_branch, Stmt *else_branch);
 Stmt *stmt_while(Expr *condition, Stmt *body);
 Stmt *stmt_fun(const char *name, int name_length, char **params, int param_count, Stmt *body);
 Stmt *stmt_return(Expr *value);
+Stmt *stmt_recur(Expr *call);   /* call deve essere un EXPR_CALL */
 void stmt_free(Stmt *stmt);
 
 #endif /* AST_H */

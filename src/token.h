@@ -26,6 +26,7 @@ typedef enum {
     TOKEN_BREAK,
     TOKEN_CONTINUE,
     TOKEN_RETURN,
+    TOKEN_RECUR,       /* recur f(x): chiamata in coda garantita (TCO)         */
     TOKEN_PRINT,
     TOKEN_TRUE,
     TOKEN_FALSE,

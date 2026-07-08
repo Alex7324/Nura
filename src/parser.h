@@ -18,6 +18,9 @@ typedef struct {
                        * azzerato entrando nel corpo di una funzione. */
     int stmt_depth;   /* annidamento delle istruzioni ({..}, if in if...):
                        * guard-rail contro lo stack overflow del parser. */
+    int fun_depth;    /* quante funzioni racchiudono il punto corrente: serve a
+                       * rilevare 'recur' fuori da una funzione (come loop_depth
+                       * per break/continue). */
 } Parser;
 
 /* (Fasi 1-3) Analizza UNA espressione e ne ritorna l'albero.

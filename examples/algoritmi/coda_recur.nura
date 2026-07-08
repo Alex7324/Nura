@@ -1,0 +1,35 @@
+// Ricorsione in CODA con 'recur': la chiamata ricorsiva e' l'ultima cosa che la
+// funzione fa, quindi Nura riusa lo stesso frame (trampolino) invece di
+// accumularne uno nuovo. Risultato: ricorsione profonda a piacere, senza crash.
+// Esegui con:  nura examples/algoritmi/coda_recur.nura
+
+// Conta alla rovescia da un milione: con un normale 'return' sbatterebbe contro
+// il tetto di profondita' (~2000); con 'recur' arriva in fondo senza problemi.
+fun conto_giu(n) {
+    if (n == 0) { return "arrivato a zero"; }
+    recur conto_giu(n - 1);
+}
+
+// Fattoriale in forma di coda: il risultato parziale viaggia nell'accumulatore
+// 'acc', cosi' dopo la chiamata non resta piu' niente da fare.
+fun fattoriale(n, acc) {
+    if (n <= 1) { return acc; }
+    recur fattoriale(n - 1, n * acc);
+}
+
+// Somma 1 + 2 + ... + n, sempre in forma di coda.
+fun somma_fino(n, acc) {
+    if (n == 0) { return acc; }
+    recur somma_fino(n - 1, acc + n);
+}
+
+// Ricorsione MUTUA in coda: pari e dispari si richiamano a vicenda. Anche questa
+// gira senza far crescere lo stack.
+fun e_pari(n)    { if (n == 0) { return true; }  recur e_dispari(n - 1); }
+fun e_dispari(n) { if (n == 0) { return false; } recur e_pari(n - 1); }
+
+print "conto_giu(1000000)   = " + conto_giu(1000000);
+print "fattoriale(10)       = " + str(fattoriale(10, 1));      // 3628800
+print "somma_fino(1000000)  = " + str(somma_fino(1000000, 0)); // 500000500000
+print "e_pari(1000000)      = " + str(e_pari(1000000));        // true
+print "e_dispari(999999)    = " + str(e_dispari(999999));      // true

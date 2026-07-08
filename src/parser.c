@@ -418,6 +418,7 @@ static Stmt *while_statement(Parser *p);
 static Stmt *for_statement(Parser *p);
 static Stmt *break_statement(Parser *p);
 static Stmt *continue_statement(Parser *p);
+static Stmt *recur_statement(Parser *p);
 static Stmt *statement_inner(Parser *p);
 
 /* Limite all'ANNIDAMENTO delle istruzioni ({ { ... } }, if dentro if, ecc.).
@@ -456,6 +457,7 @@ static Stmt *statement_inner(Parser *p) {
     if (match(p, TOKEN_BREAK))    return break_statement(p);
     if (match(p, TOKEN_CONTINUE)) return continue_statement(p);
     if (match(p, TOKEN_RETURN)) return return_statement(p);
+    if (match(p, TOKEN_RECUR))  return recur_statement(p);
     if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
 }
@@ -612,10 +614,13 @@ static Stmt *fun_declaration(Parser *p) {
     consume(p, TOKEN_LBRACE, "Mi aspettavo '{' per il corpo della funzione.");
 
     /* Il corpo e' un "nuovo mondo" per break/continue: un ciclo esterno non li
-     * rende leciti qui dentro. Azzero e ripristino loop_depth. */
+     * rende leciti qui dentro. Azzero e ripristino loop_depth. Al contrario
+     * 'recur' e' lecito PROPRIO dentro una funzione: alzo fun_depth. */
     int saved_loop = p->loop_depth;
     p->loop_depth = 0;
+    p->fun_depth++;
     Stmt *body = block_statement(p);   /* la '{' e' gia' stata consumata */
+    p->fun_depth--;
     p->loop_depth = saved_loop;
     return stmt_fun(name.start, name.length, params, count, body);
 }
@@ -630,6 +635,24 @@ static Stmt *return_statement(Parser *p) {
     return stmt_return(value);
 }
 
+/* recurStmt -> "recur" call ";"   ('recur' gia' consumato)
+ *
+ * 'recur' e' un'ISTRUZIONE (come return), non un'espressione: cosi' la
+ * "posizione di coda" e' garantita dalla sintassi stessa (non puoi scrivere
+ * 'recur f(x) + 1', perche' non produce un valore). Vincoli:
+ *   - lecito solo dentro una funzione (fun_depth > 0);
+ *   - il valore DEVE essere una chiamata di funzione (EXPR_CALL).
+ * L'ottimizzazione della chiamata in coda (trampolino) la fa l'evaluator. */
+static Stmt *recur_statement(Parser *p) {
+    if (p->fun_depth == 0)
+        error_at(p, p->previous, "'recur' fuori da una funzione.");
+    Expr *call = expression(p);
+    if (call != NULL && call->type != EXPR_CALL)
+        error_at(p, p->previous, "'recur' vuole una chiamata di funzione, es. 'recur f(x)'.");
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo la chiamata di 'recur'.");
+    return stmt_recur(call);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Punti di ingresso pubblici                                        */
 /* ------------------------------------------------------------------ */
@@ -641,6 +664,7 @@ Expr *parse_expression_source(const char *source, int *had_error) {
     parser.depth = 0;
     parser.loop_depth = 0;
     parser.stmt_depth = 0;
+    parser.fun_depth = 0;
     advance(&parser);
     Expr *tree = expression(&parser);
     consume(&parser, TOKEN_EOF, "Testo in piu' dopo l'espressione.");
@@ -656,6 +680,7 @@ void parse_program(const char *source, Program *program, int *had_error) {
     parser.depth = 0;
     parser.loop_depth = 0;
     parser.stmt_depth = 0;
+    parser.fun_depth = 0;
     advance(&parser);            /* primer */
 
     program_init(program);

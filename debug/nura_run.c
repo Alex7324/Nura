@@ -387,6 +387,19 @@ static void n_execute(Stmt *s, Env *env, int n) {
             printf("   (risalgo fuori dalla funzione)\n");
             break;
         }
+
+        case STMT_RECUR: {
+            /* Nell'interprete vero 'recur' e' una chiamata in coda ottimizzata
+             * (trampolino, vedi eval.c). Questo tracer non ottimizza: la esegue
+             * come un normale return della chiamata (basta per programmi piccoli). */
+            printf("\n> istruzione %d:  recur ...\n", n);
+            Value v = n_eval(s->as.recur.call, env);
+            ret_val = v;
+            returning = 1;
+            ind(); printf("recur -> "); value_print(v);
+            printf("   (chiamata in coda; qui la eseguo come un return)\n");
+            break;
+        }
     }
 }
 

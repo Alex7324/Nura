@@ -357,6 +357,62 @@ print fattoriale(5);         // 120
 > interrompe con un errore a runtime ("profondità massima superata") invece di
 > bloccarsi con uno *stack overflow*.
 
+### `recur` — ricorsione in coda (senza limiti)
+
+Quel tetto scatta perché ogni chiamata "sospesa" occupa spazio: se `fattoriale`
+chiama sé stesso, deve *ricordarsi* di moltiplicare per `k` **dopo** che la
+chiamata interna ha finito. Ma a volte la chiamata ricorsiva è **l'ultima cosa**
+che la funzione fa — non resta niente da fare dopo. Si chiama *chiamata in coda*
+(*tail call*): lì non c'è nulla da ricordare, e Nura può riusare lo stesso spazio
+invece di accumularne di nuovo.
+
+Per chiedere questa ottimizzazione si usa **`recur`** al posto di `return`:
+
+```
+fun conto_giu(n) {
+    if (n == 0) { return "finito"; }
+    recur conto_giu(n - 1);      // chiamata in coda: nessun limite di profondità
+}
+print conto_giu(1000000);        // un milione di livelli, nessun crash
+```
+
+`recur f(x)` significa: *"la funzione finisce qui, riparti da `f(x)`"*. Nura non
+accumula un nuovo livello — **riusa** quello corrente (una tecnica detta
+*trampolino*). Così la ricorsione in coda gira all'infinito senza toccare il tetto
+di profondità.
+
+Molte funzioni ricorsive si riscrivono in forma di coda con un **accumulatore**,
+cioè un parametro che porta avanti il risultato parziale:
+
+```
+// Fattoriale in forma di coda: la moltiplicazione avviene PRIMA della chiamata,
+// il risultato viaggia nel parametro 'acc'. Non resta niente "da fare dopo".
+fun fattoriale(n, acc) {
+    if (n <= 1) { return acc; }
+    recur fattoriale(n - 1, n * acc);
+}
+print fattoriale(10, 1);         // 3628800
+```
+
+`recur` funziona anche tra funzioni diverse (**ricorsione mutua**):
+
+```
+fun pari(n)    { if (n == 0) { return true; }  recur dispari(n - 1); }
+fun dispari(n) { if (n == 0) { return false; } recur pari(n - 1); }
+print pari(1000000);             // true, senza crescere lo stack
+```
+
+**Regole e limiti di `recur`:**
+- si usa **solo dentro una funzione** (fuori è un errore di sintassi);
+- il valore deve essere una **chiamata di funzione** (`recur f(x)`); non puoi
+  scrivere `recur f(x) + 1`, perché in quel caso la funzione dovrebbe fare ancora
+  una somma *dopo* la chiamata — non sarebbe più una chiamata "in coda";
+- la funzione chiamata deve essere una **funzione del linguaggio**, non una nativa;
+- `recur` va usato solo quando la chiamata è davvero l'ultima cosa: un normale
+  `return fattoriale(n - 1)` **non** è ottimizzato ed è ancora soggetto al tetto di
+  profondità. `recur` è esplicito proprio per questo: rende evidente (e verificata)
+  la tua intenzione di fare una chiamata in coda.
+
 ### Funzioni native
 Alcune funzioni sono **già pronte**: sono scritte in C dentro l'interprete (si
 chiamano *native*), ma si usano come qualsiasi altra funzione.
@@ -461,9 +517,10 @@ Grammatica di Nura in forma sintetica (`*` = zero o più, `?` = facoltativo).
 ```
 programma   -> istruzione* EOF
 
-istruzione  -> varDecl | funDecl | print | if | while | for | break | continue | return | blocco | exprStmt
+istruzione  -> varDecl | funDecl | print | if | while | for | break | continue | return | recur | blocco | exprStmt
 break       -> "break" ";"
 continue    -> "continue" ";"
+recur       -> "recur" chiamata ";"
 varDecl     -> "var" IDENT "=" espressione ";"
 funDecl     -> "fun" IDENT "(" parametri? ")" blocco
 parametri   -> IDENT ( "," IDENT )*
@@ -472,6 +529,7 @@ if          -> "if" "(" espressione ")" istruzione ( "else" istruzione )?
 while       -> "while" "(" espressione ")" istruzione
 for         -> "for" "(" ( varDecl | exprStmt | ";" ) espressione? ";" espressione? ")" istruzione
 return      -> "return" espressione? ";"
+                                            // recur: la "chiamata" dev'essere una vera chiamata di funzione
 blocco      -> "{" istruzione* "}"
 exprStmt    -> espressione ";"
 

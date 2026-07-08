@@ -189,6 +189,20 @@ check "break fuori da ciclo"  "break;"    "[riga 1] Errore di sintassi vicino a 
 check "continue fuori da ciclo" "continue;" "[riga 1] Errore di sintassi vicino a 'continue': 'continue' fuori da un ciclo."
 check "break non attraversa funzione" "fun f(){ break; } print 1;" "[riga 1] Errore di sintassi vicino a 'break': 'break' fuori da un ciclo."
 
+echo "== recur: chiamate in coda (TCO) =="
+# Ricorsione in coda ILLIMITATA: senza il trampolino queste sbatterebbero
+# contro il muro della profondita' massima (~2000).
+check "recur profondissimo"   "fun c(n){ if(n==0){return \"ok\";} recur c(n-1); } print c(1000000);"                 "ok"
+check "recur fattoriale tail" "fun f(n,a){ if(n<=1){return a;} recur f(n-1,n*a); } print f(10,1);"                    "3628800"
+check "recur somma tail"      "fun s(n,a){ if(n==0){return a;} recur s(n-1,a+n); } print s(100000,0);"                "5000050000"
+check "recur mutuo pari"      "fun p(n){ if(n==0){return true;} recur d(n-1); } fun d(n){ if(n==0){return false;} recur p(n-1); } print p(500000);" "true"
+check "recur dentro while"    "fun c(n){ while(true){ if(n==0){return 0;} recur c(n-1); } } print c(300000);"        "0"
+# Vincoli: recur solo dentro una funzione, solo su una chiamata, solo funzioni utente.
+check "recur fuori funzione"  "recur f(1);"                                        "[riga 1] Errore di sintassi vicino a 'recur': 'recur' fuori da una funzione."
+check "recur senza chiamata"  "fun f(n){ recur n-1; } print f(1);"                 "[riga 1] Errore di sintassi vicino a '1': 'recur' vuole una chiamata di funzione, es. 'recur f(x)'."
+check "recur su nativa"       "fun f(){ recur len([1]); } print f();"              "Errore a runtime: 'recur' vuole una funzione definita nel linguaggio (non una nativa)."
+check "recur arieta' errata"  "fun g(a,b){ return a+b; } fun f(n){ recur g(n); } print f(1);" "Errore a runtime: la funzione 'g' vuole 2 argomenti, ne hai passati 1."
+
 echo "== Garbage collector (Fase 9) =="
 # Cicli lunghi che creano tanta spazzatura: il GC la raccoglie, il risultato
 # resta corretto e non si esaurisce la memoria (prima crashava con 'Memoria esaurita').
@@ -205,6 +219,9 @@ check "GC: ciclo dentro funzione" "fun run(){ var s=0; for(var i=0;i<200000;i=i+
 # Radici temporanee: oggetti vivi solo in variabili C attraverso una chiamata.
 check "GC: array literal span chiamate" "fun mk(x){return [x,x];} print [mk(1),mk(2)];" "[[1, 1], [2, 2]]"
 check "GC: arg che alloca tra gli arg" "fun s3(a,b,c){return a+b+c;} fun m(){return [1];} print s3(m()[0],m()[0],m()[0]);" "3"
+# recur che alloca a ogni giro: l'argomento in coda (stringa nuova) e' una radice
+# temporanea attraverso lo sbobinamento; non deve essere raccolto per errore.
+check "GC: recur che alloca"  "fun cat(n,s){ if(n==0){return s;} recur cat(n-1,s+\"x\"); } print len(cat(5000,\"\"));" "5000"
 
 echo "== Fase 10: funzioni native (len, push) =="
 check "len di array"         "print len([10,20,30]);"                 "3"

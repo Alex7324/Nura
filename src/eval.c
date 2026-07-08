@@ -33,7 +33,14 @@ struct Interp {
     int is_returning;  /* 1 mentre un 'return' sta "risalendo" fuori dalla funzione */
     int is_breaking;   /* 1 mentre un 'break' sta "risalendo" fino al ciclo       */
     int is_continuing; /* 1 mentre un 'continue' sta "risalendo" fino al ciclo    */
+    int is_tail_calling;/* 1 mentre un 'recur' sta "risalendo" fino al trampolino */
     Value return_value;
+    /* Chiamata in coda pendente (recur): callee gia' risolto + argomenti gia'
+     * valutati, in attesa che il trampolino (EXPR_CALL) li consumi riusando il
+     * frame C. Radicati dal GC finche' tail_args != NULL (vedi mark_roots). */
+    Value  tail_callee;
+    Value *tail_args;
+    int    tail_argc;
     int depth;         /* profondita' di ricorsione di evaluate()/execute()     */
     /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
      * collector (vedi gc.c): niente piu' arene manuali qui dentro. */
@@ -45,6 +52,7 @@ static Value evaluate(Expr *expr, Interp *it);
 static Value evaluate_impl(Expr *expr, Interp *it);
 static void  execute(Stmt *stmt, Interp *it);
 static void  execute_impl(Stmt *stmt, Interp *it);
+static Obj  *value_obj(Value v);   /* definita piu' sotto; serve a mark_roots */
 
 /* Puntatore all'interprete in esecuzione: serve al GC per trovare le radici.
  * Uno solo alla volta gira, quindi va bene una variabile a livello di modulo. */
@@ -59,7 +67,16 @@ static void mark_roots(void) {
     if (g_it == NULL) return;
     gc_mark_env(g_it->globals);
     gc_mark_env(g_it->env);
-    /* Le radici temporanee (oggetti a meta' calcolo) e gli ambienti dei
+    /* Chiamata in coda pendente (recur): il callee e gli argomenti gia'
+     * valutati non sono ancora nel nuovo scope, quindi non sarebbero
+     * raggiungibili dalle radici normali. Li marchiamo qui finche' il
+     * trampolino non li ha consumati (tail_args tornera' NULL). */
+    if (g_it->tail_args != NULL) {
+        gc_mark_object(value_obj(g_it->tail_callee));
+        for (int i = 0; i < g_it->tail_argc; i++)
+            gc_mark_object(value_obj(g_it->tail_args[i]));
+    }
+    /* Le altre radici temporanee (oggetti a meta' calcolo) e gli ambienti dei
      * chiamanti sospesi li protegge chi li ha in mano, con gc_push_temp. */
 }
 
@@ -504,47 +521,100 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
                 return value_number(0);
             }
 
-            Stmt *decl = callee.as.function.decl;
-            int argc = expr->as.call.arg_count;
-            int paramc = decl->as.function.param_count;
-            if (argc != paramc) {
-                char msg[128];
-                snprintf(msg, sizeof(msg),
-                         "la funzione '%s' vuole %d argomenti, ne hai passati %d.",
-                         decl->as.function.name, paramc, argc);
-                runtime_error(it, msg);
-                return value_number(0);
+            /* ---- Chiamata a funzione UTENTE: trampolino per la TCO ----
+             * Di norma una chiamata Nura = una chiamata C annidata a execute():
+             * lo stack C cresce di un frame per livello (il guard-rail MAX_DEPTH
+             * lo ferma prima del crash). Le chiamate in CODA ('recur') invece le
+             * gestiamo con un CICLO: quando il corpo esegue un 'recur', deposita
+             * la prossima chiamata nei registri tail_* e risale fin qui (come un
+             * return); noi la raccogliamo e ripartiamo RIUSANDO questo frame C.
+             * Cosi' una catena di recur, anche fra funzioni diverse, non fa
+             * crescere lo stack: ricorsione in coda illimitata.
+             *
+             * La PRIMA chiamata la innesco io, valutando gli argomenti dal
+             * sorgente (AST) nell'ambiente del chiamante; le successive arrivano
+             * gia' valutate da STMT_RECUR. In entrambi i casi passano dai registri
+             * tail_*, che il GC tratta come radici (vedi mark_roots). */
+
+            /* L'ambiente del chiamante non e' nella catena del nuovo scope:
+             * lo proteggo per tutto il trampolino e lo ripristino UNA volta,
+             * alla fine (non a ogni giro). */
+            Env *caller_env = it->env;
+            gc_push_temp((Obj *)caller_env);
+
+            /* Innesco: valuto gli argomenti della prima chiamata e li deposito
+             * nei registri tail_*. Proteggo callee e argomenti mentre li calcolo;
+             * dopo, la loro radice diventa tail_* (mark_roots). */
+            {
+                int argc0 = expr->as.call.arg_count;
+                Value *args0 = NULL;
+                if (argc0 > 0) {
+                    args0 = malloc(sizeof(Value) * (size_t)argc0);
+                    if (args0 == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+                }
+                gc_push_temp((Obj *)callee.as.function.closure);
+                int pushed = 1;
+                for (int i = 0; i < argc0; i++) {
+                    args0[i] = evaluate(expr->as.call.args[i], it);
+                    if (it->had_error) {
+                        gc_pop_temp(pushed); free(args0);
+                        gc_pop_temp(1);   /* caller_env */
+                        return value_number(0);
+                    }
+                    gc_push_temp(value_obj(args0[i]));
+                    pushed++;
+                }
+                it->tail_callee = callee;
+                it->tail_args   = args0;
+                it->tail_argc   = argc0;
+                gc_pop_temp(pushed);   /* callee e args ora coperti da tail_* */
             }
 
-            /* Protezioni GC. Da qui in poi si valutano gli argomenti (che
-             * possono chiamare funzioni e far scattare una raccolta) e si esegue
-             * il corpo. Proteggo: (1) la closure catturata dalla funzione, (2) il
-             * nuovo ambiente di chiamata mentre non e' ancora quello corrente, e
-             * (3) l'ambiente del CHIAMANTE, che non e' nella catena del nuovo
-             * scope (call_env racchiude la closure, non il chiamante). */
-            gc_push_temp((Obj *)callee.as.function.closure);   /* (1) */
+            /* Ciclo del trampolino: consuma la chiamata pendente, esegue il
+             * corpo, e se il corpo ha fatto 'recur' ricomincia (senza annidare). */
+            for (;;) {
+                Value  fn     = it->tail_callee;   /* sempre VAL_FUNCTION */
+                Value *cargs  = it->tail_args;
+                int    cargc  = it->tail_argc;
+                Stmt  *fdecl  = fn.as.function.decl;
+                int    paramc = fdecl->as.function.param_count;
 
-            /* Nuovo scope per la chiamata. Racchiude l'ambiente CATTURATO dalla
-             * funzione (la closure): cosi' vede le variabili di dove e' definita. */
-            Env *call_env = gc_new_env();
-            call_env->enclosing = callee.as.function.closure;
-            gc_push_temp((Obj *)call_env);                     /* (2) */
+                if (cargc != paramc) {
+                    char msg[128];
+                    snprintf(msg, sizeof(msg),
+                             "la funzione '%s' vuole %d argomenti, ne hai passati %d.",
+                             fdecl->as.function.name, paramc, cargc);
+                    runtime_error(it, msg);
+                    free(cargs);
+                    it->tail_args = NULL;
+                    break;
+                }
 
-            for (int i = 0; i < paramc; i++) {
-                Value arg = evaluate(expr->as.call.args[i], it);
-                if (it->had_error) { gc_pop_temp(2); return value_number(0); }
-                env_define(call_env, decl->as.function.params[i], arg);
+                /* Nuovo scope per QUESTA chiamata; racchiude la closure di fn
+                 * (cosi' vede le variabili di dove fn e' definita). Lo proteggo
+                 * durante gli env_define, poi lo copre it->env. */
+                Env *call_env = gc_new_env();
+                call_env->enclosing = fn.as.function.closure;
+                gc_push_temp((Obj *)call_env);
+                for (int i = 0; i < paramc; i++)
+                    env_define(call_env, fdecl->as.function.params[i], cargs[i]);
+
+                /* Gli argomenti ora vivono nel call_env: svuoto i registri
+                 * (il buffer C non serve piu'; i Value sono stati copiati). */
+                free(cargs);
+                it->tail_args = NULL;
+                it->env = call_env;    /* call_env ora raggiungibile da it->env */
+                gc_pop_temp(1);        /* call_env coperto da it->env */
+
+                it->is_tail_calling = 0;
+                execute(fdecl->as.function.body, it);
+                if (it->had_error) break;
+                if (it->is_tail_calling) continue;   /* 'recur': tail_* gia' pronto */
+                break;
             }
 
-            /* Il guard-rail anti-crash e' nel wrapper evaluate/execute (conta la
-             * profondita' totale di ricorsione): una ricorsione infinita o troppo
-             * profonda da' un errore controllato invece di far esplodere lo stack. */
-            Env *saved = it->env;
-            gc_push_temp((Obj *)saved);                        /* (3) */
-            it->env = call_env;
-            execute(decl->as.function.body, it);
-            it->env = saved;
-            gc_pop_temp(3);   /* (3),(2),(1): saved, call_env, closure */
+            it->env = caller_env;
+            gc_pop_temp(1);   /* caller_env */
 
             Value result;
             if (it->is_returning) {
@@ -690,7 +760,7 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                 /* Se e' scattato return/break/continue, smetto di eseguire il
                  * blocco: il segnale "risale" fino a chi lo gestisce (la funzione
                  * per return, il ciclo per break/continue). */
-                if (it->had_error || it->is_returning ||
+                if (it->had_error || it->is_returning || it->is_tail_calling ||
                     it->is_breaking || it->is_continuing) break;
             }
 
@@ -719,7 +789,7 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                 if (it->had_error) break;
                 if (!is_truthy(cond)) break;
                 execute(stmt->as.while_stmt.body, it);
-                if (it->had_error || it->is_returning) break;
+                if (it->had_error || it->is_returning || it->is_tail_calling) break;
                 if (it->is_breaking)   { it->is_breaking = 0; break; }
                 if (it->is_continuing) { it->is_continuing = 0; }  /* -> prossimo giro */
             }
@@ -737,7 +807,7 @@ static void execute_impl(Stmt *stmt, Interp *it) {
             if (stmt->as.for_stmt.initializer != NULL)
                 execute(stmt->as.for_stmt.initializer, it);
 
-            while (!it->had_error && !it->is_returning) {
+            while (!it->had_error && !it->is_returning && !it->is_tail_calling) {
                 gc_maybe_collect();
                 if (stmt->as.for_stmt.condition != NULL) {
                     Value cond = evaluate(stmt->as.for_stmt.condition, it);
@@ -745,7 +815,7 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                     if (!is_truthy(cond)) break;
                 }
                 execute(stmt->as.for_stmt.body, it);
-                if (it->had_error || it->is_returning) break;
+                if (it->had_error || it->is_returning || it->is_tail_calling) break;
                 if (it->is_breaking) { it->is_breaking = 0; break; }
                 if (it->is_continuing) it->is_continuing = 0;  /* NON esce: fa l'incremento */
 
@@ -781,6 +851,48 @@ static void execute_impl(Stmt *stmt, Interp *it) {
             it->is_returning = 1;   /* segnala: stiamo uscendo dalla funzione */
             break;
         }
+
+        case STMT_RECUR: {
+            /* 'recur f(args)' = chiamata in coda GARANTITA. Non eseguo la chiamata
+             * qui (crescerebbe lo stack): valuto callee e argomenti, li deposito
+             * nei registri 'tail_*' dell'interprete e alzo is_tail_calling. Il
+             * segnale risale come un return, fino al trampolino in EXPR_CALL, che
+             * riusa lo stesso frame C. Cosi' la ricorsione in coda e' illimitata. */
+            Expr *call = stmt->as.recur.call;   /* garantito EXPR_CALL dal parser */
+
+            Value fn = evaluate(call->as.call.callee, it);
+            if (it->had_error) break;
+            if (fn.type != VAL_FUNCTION) {
+                runtime_error(it, "'recur' vuole una funzione definita nel linguaggio (non una nativa).");
+                break;
+            }
+
+            /* Valuto gli argomenti proteggendoli via gc_push_temp mentre li
+             * calcolo (uno puo' chiamare funzioni e far scattare il GC), poi li
+             * sposto nei registri tail_*, dove sono radicati da mark_roots. */
+            int argc = call->as.call.arg_count;
+            Value *args = NULL;
+            if (argc > 0) {
+                args = malloc(sizeof(Value) * (size_t)argc);
+                if (args == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+            }
+            gc_push_temp((Obj *)fn.as.function.closure);   /* proteggo il callee */
+            int pushed = 1;
+            for (int i = 0; i < argc; i++) {
+                args[i] = evaluate(call->as.call.args[i], it);
+                if (it->had_error) { gc_pop_temp(pushed); free(args); break; }
+                gc_push_temp(value_obj(args[i]));
+                pushed++;
+            }
+            if (it->had_error) break;
+
+            it->tail_callee = fn;
+            it->tail_args   = args;   /* da ora radicati da mark_roots */
+            it->tail_argc   = argc;
+            gc_pop_temp(pushed);      /* callee e args ora coperti da tail_* */
+            it->is_tail_calling = 1;
+            break;
+        }
     }
 }
 
@@ -797,6 +909,10 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.return_value = value_number(0);
     it.is_breaking = 0;
     it.is_continuing = 0;
+    it.is_tail_calling = 0;
+    it.tail_callee = value_number(0);
+    it.tail_args = NULL;
+    it.tail_argc = 0;
     it.depth = 0;
 
     /* Rendo disponibili le funzioni native (len, push, ...) nell'ambiente
@@ -810,7 +926,7 @@ void run_program(Program *program, Env *env, int *had_error) {
     for (int i = 0; i < program->count; i++) {
         gc_maybe_collect();   /* confine sicuro tra le istruzioni top-level */
         execute(program->statements[i], &it);
-        if (it.had_error || it.is_returning) break;
+        if (it.had_error || it.is_returning || it.is_tail_calling) break;
     }
 
     /* L'interprete 'it' e' locale: scollego il GC prima di uscire, cosi' non

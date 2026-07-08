@@ -52,7 +52,8 @@ Quattro tipi di valore: **numeri**, **booleani** (`true`/`false`), **stringhe**
 e il not `!`, parentesi; **variabili** (`var`), **assegnamento** e l'istruzione
 **`print`**; **controllo di flusso** con `if`/`else`, `while`, `for` e blocchi `{ }` con
 scope locale; **funzioni** (`fun`, `return`) con **ricorsione** e **closures**
-(una funzione ricorda le variabili di dove è nata). Le variabili vivono in un
+(una funzione ricorda le variabili di dove è nata), incluse le **chiamate in coda**
+(`recur`) che rendono la ricorsione in coda illimitata. Le variabili vivono in un
 ambiente realizzato come **tabella hash**. Segnala sia gli
 errori di sintassi (con il numero di riga) sia quelli a runtime (divisione per zero,
 variabile non definita, tipi incompatibili).
@@ -125,6 +126,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 9 — Garbage collector**: mark-and-sweep. Ambienti, array e stringhe sono oggetti gestiti; la memoria dei cicli lunghi viene recuperata anche dentro le funzioni (radici temporanee). Diagnostica con `NURA_GC_LOG` / `NURA_GC_STRESS`
 - [x] **Fase 10 — Funzioni native**: funzioni scritte in C ed esposte a Nura (`VAL_NATIVE`): `len`, `push`, `pop`, `str`, `num`, `int`, `rand`, `clock`, `input`. Indicizzazione anche delle stringhe (`s[i]`)
 - [x] **Fase 11 — `break` e `continue`**: controllo dei cicli, con `continue` che nel `for` esegue comunque l'incremento
+- [x] **Fase 12 — `recur` (tail-call optimization)**: chiamate in coda esplicite. `recur f(x)` riusa il frame corrente (tecnica del *trampolino*) invece di accumularne uno nuovo: la ricorsione in coda — anche mutua — è illimitata e non tocca il tetto di profondità. Il garbage collector radica la chiamata pendente (verificato con `NURA_GC_STRESS`)
 
 ## Come l'ho sviluppato
 

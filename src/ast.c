@@ -428,6 +428,12 @@ Stmt *stmt_return(Expr *value) {
     return s;
 }
 
+Stmt *stmt_recur(Expr *call) {
+    Stmt *s = new_stmt(STMT_RECUR);
+    s->as.recur.call = call;   /* garantito EXPR_CALL dal parser */
+    return s;
+}
+
 void stmt_free(Stmt *stmt) {
     if (stmt == NULL) return;
     switch (stmt->type) {
@@ -472,6 +478,9 @@ void stmt_free(Stmt *stmt) {
             break;
         case STMT_RETURN:
             ast_free(stmt->as.ret.value);   /* ast_free gestisce NULL */
+            break;
+        case STMT_RECUR:
+            ast_free(stmt->as.recur.call);
             break;
     }
     free(stmt);
