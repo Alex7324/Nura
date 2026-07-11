@@ -438,9 +438,13 @@ static Stmt *statement(Parser *p) {
         error_at(p, p->current, "troppe istruzioni annidate.");
         return stmt_expr(ast_number(0));   /* segnaposto: had_error ferma il parsing */
     }
+    int line = p->current.line;   /* la riga dove INIZIA l'istruzione */
     p->stmt_depth++;
     Stmt *s = statement_inner(p);
     p->stmt_depth--;
+    /* UN punto solo per tutte le istruzioni: e' quello che permette agli
+     * errori a runtime di dire la riga senza portarla su ogni nodo. */
+    s->line = line;
     return s;
 }
 

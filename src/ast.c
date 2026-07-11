@@ -359,6 +359,7 @@ static Stmt *new_stmt(StmtType type) {
     Stmt *s = malloc(sizeof(Stmt));
     if (s == NULL) { fprintf(stderr, "Memoria esaurita durante il parsing.\n"); exit(1); }
     s->type = type;
+    s->line = 0;   /* la imposta il parser (statement()); 0 = ignota */
     return s;
 }
 
@@ -367,6 +368,8 @@ Stmt *stmt_var(const char *name, int length, Expr *initializer, int line) {
     s->as.var.name = copy_name(name, length);
     s->as.var.initializer = initializer;
     s->as.var.line = line;   /* serve a trace/why per dire DOVE e' avvenuto */
+    s->line = line;          /* anche qui: copre il var dentro 'for (var i...' ,
+                              * che non passa dal wrapper statement() */
     return s;
 }
 

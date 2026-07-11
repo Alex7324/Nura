@@ -103,6 +103,9 @@ typedef enum {
 
 struct Stmt {
     StmtType type;
+    int line;      /* riga del sorgente dove INIZIA l'istruzione (0 = ignota).
+                    * La imposta il parser in un punto solo (statement());
+                    * l'evaluator la usa per gli errori a runtime. */
     union {
         struct { char *name; Expr *initializer; int line; } var;   /* line: per trace/why */
         struct { Expr *expr; } print;

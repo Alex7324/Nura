@@ -562,8 +562,7 @@ why tot;              // spiega tot... e anche da dove veniva base
 
 ## 13. Errori
 
-Nura distingue due tipi di errore, entrambi stampati con il numero di riga quando
-possibile.
+Nura distingue due tipi di errore, entrambi **con il numero di riga**.
 
 - **Errori di sintassi**: il programma è scritto male e non può nemmeno partire
   (es. manca un `;`, una parentesi non è chiusa).
@@ -572,9 +571,16 @@ possibile.
   ```
 - **Errori a runtime**: il programma è scritto bene ma fa qualcosa di illegale
   mentre gira (divisione per zero, variabile non definita, tipi incompatibili).
+  La riga indicata è quella dell'**istruzione in esecuzione** in quel momento:
   ```
-  print 1 / 0;   →  Errore a runtime: divisione per zero.
+  var a = 10;
+  var b = 0;
+  var c = a / b;   →  [riga 3] Errore a runtime: divisione per zero.
   ```
+  La riga segue il flusso reale del programma: un errore *dentro* una funzione
+  punta alla riga del corpo che stava girando; un errore nel resto
+  dell'espressione *dopo* che la funzione è tornata punta alla riga del
+  chiamante; un errore nella condizione di un ciclo punta alla riga del ciclo.
 
 ## 14. Appendice: grammatica
 

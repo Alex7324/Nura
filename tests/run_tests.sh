@@ -96,9 +96,9 @@ check "funzione con stringa" 'fun s(n) { return "Ciao " + n; } print s("Nura");'
 check "senza return da' 0"   "fun f() { } print f();"                                                     "0"
 check "scope: param locale"  "fun f(x) { return x; } var x = 99; print f(1); print x;"                    "1
 99"
-check "scope blocco locale"  "{ var x = 5; } print x;"     "Errore a runtime: variabile 'x' non definita."
-check "argomenti errati"     "fun f(a) { return a; } print f(1, 2);"  "Errore a runtime: la funzione 'f' vuole 1 argomenti, ne hai passati 2."
-check "chiamo un numero"     "print 5(3);"                 "Errore a runtime: si possono chiamare solo le funzioni."
+check "scope blocco locale"  "{ var x = 5; } print x;"     "[riga 1] Errore a runtime: variabile 'x' non definita."
+check "argomenti errati"     "fun f(a) { return a; } print f(1, 2);"  "[riga 1] Errore a runtime: la funzione 'f' vuole 1 argomenti, ne hai passati 2."
+check "chiamo un numero"     "print 5(3);"                 "[riga 1] Errore a runtime: si possono chiamare solo le funzioni."
 
 echo "== Closures =="
 check "closure ricorda"      "fun c() { var n = 0; fun f() { n = n + 1; return n; } return f; } var a = c(); print a(); print a(); print a();" "1
@@ -121,16 +121,16 @@ check "uguaglianza identita'" "var a = [1]; var b = a; print a == b;"        "tr
 check "contenuto != identita'" "print [1, 2] == [1, 2];"                     "false"
 check "array da funzione"    "fun c(x, y) { return [x, y]; } print c(3, 4);" "[3, 4]"
 check "somma su array"       "var a=[1,2,3]; var s=0; var i=0; while(i<3){ s=s+a[i]; i=i+1; } print s;" "6"
-check "indice fuori limiti"  "var a=[1,2]; print a[5];"    "Errore a runtime: indice 5 fuori dai limiti: l'array ha 2 elementi."
-check "un solo elemento"     "var a=[7]; print a[9];"      "Errore a runtime: indice 9 fuori dai limiti: l'array ha 1 elemento."
-check "indice negativo"      "var a=[1,2]; print a[-1];"   "Errore a runtime: indice -1 fuori dai limiti: l'array ha 2 elementi."
-check "indicizzo un numero"  "var n=3; print n[0];"        "Errore a runtime: si puo' indicizzare solo un array o una stringa, non un valore di tipo numero."
-check "indice non numerico"  'var a=[1]; print a["x"];'    "Errore a runtime: l'indice deve essere un numero, non un valore di tipo stringa."
+check "indice fuori limiti"  "var a=[1,2]; print a[5];"    "[riga 1] Errore a runtime: indice 5 fuori dai limiti: l'array ha 2 elementi."
+check "un solo elemento"     "var a=[7]; print a[9];"      "[riga 1] Errore a runtime: indice 9 fuori dai limiti: l'array ha 1 elemento."
+check "indice negativo"      "var a=[1,2]; print a[-1];"   "[riga 1] Errore a runtime: indice -1 fuori dai limiti: l'array ha 2 elementi."
+check "indicizzo un numero"  "var n=3; print n[0];"        "[riga 1] Errore a runtime: si puo' indicizzare solo un array o una stringa, non un valore di tipo numero."
+check "indice non numerico"  'var a=[1]; print a["x"];'    "[riga 1] Errore a runtime: l'indice deve essere un numero, non un valore di tipo stringa."
 
 echo "== Fase 7b: robustezza array (casi limite / anti-crash) =="
-check "indice deve essere intero" "var a=[1,2,3]; print a[2.9];"  "Errore a runtime: l'indice deve essere un numero intero, non 2.9."
+check "indice deve essere intero" "var a=[1,2,3]; print a[2.9];"  "[riga 1] Errore a runtime: l'indice deve essere un numero intero, non 2.9."
 check "indice intero come 2.0 ok"  "var a=[1,2,3]; print a[2.0];" "3"
-check "indice enorme non e' UB"    "var a=[1]; print a[1000000000];" "Errore a runtime: indice 1000000000 fuori dai limiti: l'array ha 1 elemento."
+check "indice enorme non e' UB"    "var a=[1]; print a[1000000000];" "[riga 1] Errore a runtime: indice 1000000000 fuori dai limiti: l'array ha 1 elemento."
 # Array ciclico (a contiene se stesso): la stampa NON deve andare in loop.
 # Attesi 100 '[' + '[...]' + 100 ']'  (MAX_PRINT_DEPTH = 100).
 CICLICO="$(printf '[%.0s' $(seq 1 100))[...]$(printf ']%.0s' $(seq 1 100))"
@@ -158,7 +158,7 @@ check "for con blocco"       "var s=0; for (var i=1; i<=4; i=i+1) { s=s+i; } pri
 check "for somma su array"   "var a=[10,20,30]; var s=0; for (var i=0; i<3; i=i+1) s=s+a[i]; print s;" "60"
 check "for: var non esce"    "for (var k=0; k<2; k=k+1) print k; print k;" "0
 1
-Errore a runtime: variabile 'k' non definita."
+[riga 1] Errore a runtime: variabile 'k' non definita."
 check "for init esterno"     "var i=0; for (i=0; i<3; i=i+1) {} print i;" "3"
 check "for solo condizione"  "var i=0; for (; i<2;) { print i; i=i+1; }" "0
 1"
@@ -200,8 +200,8 @@ check "recur dentro while"    "fun c(n){ while(true){ if(n==0){return 0;} recur 
 # Vincoli: recur solo dentro una funzione, solo su una chiamata, solo funzioni utente.
 check "recur fuori funzione"  "recur f(1);"                                        "[riga 1] Errore di sintassi vicino a 'recur': 'recur' fuori da una funzione."
 check "recur senza chiamata"  "fun f(n){ recur n-1; } print f(1);"                 "[riga 1] Errore di sintassi vicino a '1': 'recur' vuole una chiamata di funzione, es. 'recur f(x)'."
-check "recur su nativa"       "fun f(){ recur len([1]); } print f();"              "Errore a runtime: 'recur' vuole una funzione definita nel linguaggio (non una nativa)."
-check "recur arieta' errata"  "fun g(a,b){ return a+b; } fun f(n){ recur g(n); } print f(1);" "Errore a runtime: la funzione 'g' vuole 2 argomenti, ne hai passati 1."
+check "recur su nativa"       "fun f(){ recur len([1]); } print f();"              "[riga 1] Errore a runtime: 'recur' vuole una funzione definita nel linguaggio (non una nativa)."
+check "recur arieta' errata"  "fun g(a,b){ return a+b; } fun f(n){ recur g(n); } print f(1);" "[riga 1] Errore a runtime: la funzione 'g' vuole 2 argomenti, ne hai passati 1."
 
 echo "== trace / why: provenienza dei valori =="
 # 'trace x' registra la storia delle assegnazioni; 'why x' stampa l'albero
@@ -243,9 +243,9 @@ check "why: ciclo, storia limitata" "var i = 0; trace i; while (i < 3) { i = i +
           perche' (riga 1): i = i + 1
             dove i valeva 0 (riga 1)"
 # Vincoli e errori.
-check "why su var non tracciata"   "var x = 1; why x;"  "Errore a runtime: why: la variabile 'x' non e' tracciata (serve prima 'trace x;')."
-check "trace su var non definita"  "trace boh;"          "Errore a runtime: trace: la variabile 'boh' non e' definita."
-check "why su var non definita"    "why boh;"            "Errore a runtime: why: la variabile 'boh' non e' definita."
+check "why su var non tracciata"   "var x = 1; why x;"  "[riga 1] Errore a runtime: why: la variabile 'x' non e' tracciata (serve prima 'trace x;')."
+check "trace su var non definita"  "trace boh;"          "[riga 1] Errore a runtime: trace: la variabile 'boh' non e' definita."
+check "why su var non definita"    "why boh;"            "[riga 1] Errore a runtime: why: la variabile 'boh' non e' definita."
 # Robustezza: un ciclo LUNGO con trace non accumula memoria (tetto di storia:
 # i nodi scollegati diventano spazzatura per il GC) e il programma resta veloce.
 check "trace: ciclo lungo limitato" "var i = 0; trace i; while (i < 200000) { i = i + 1; } print i;" "200000"
@@ -278,30 +278,30 @@ check "push muta e ritorna len" "var a=[1,2]; print push(a,3); print a;" "3
 [1, 2, 3]"
 check "costruire con push"   "var a=[]; for(var i=0;i<4;i=i+1){ push(a,i*i); } print a;" "[0, 1, 4, 9]"
 check "scorrere con len"     "var a=[5,7,9]; var s=0; for(var i=0;i<len(a);i=i+1){ s=s+a[i]; } print s;" "21"
-check "len arieta' errata"   "print len(1,2);"      "Errore a runtime: la funzione 'len' vuole 1 argomenti, ne hai passati 2."
-check "len tipo errato"      "print len(42);"       "Errore a runtime: len() vuole un array o una stringa."
-check "push tipo errato"     "push(5, 1);"          "Errore a runtime: push() vuole un array come primo argomento."
+check "len arieta' errata"   "print len(1,2);"      "[riga 1] Errore a runtime: la funzione 'len' vuole 1 argomenti, ne hai passati 2."
+check "len tipo errato"      "print len(42);"       "[riga 1] Errore a runtime: len() vuole un array o una stringa."
+check "push tipo errato"     "push(5, 1);"          "[riga 1] Errore a runtime: push() vuole un array come primo argomento."
 check "pop toglie l'ultimo"  "var a=[1,2,3]; print pop(a); print a;" "3
 [1, 2]"
-check "pop su array vuoto"   "pop([]);"             "Errore a runtime: pop() su un array vuoto."
+check "pop su array vuoto"   "pop([]);"             "[riga 1] Errore a runtime: pop() su un array vuoto."
 check "str di numero"        'print "n=" + str(42);'                 "n=42"
 check "str di decimale"      "print str(3.14);"                      "3.14"
 check "str di bool"          "print str(true);"                      "true"
 check "str di array annidato" 'print str([1,"x",[2,3]]);'            '[1, "x", [2, 3]]'
 check "num da stringa"       'print num("42") + 1;'                  "43"
 check "num con spazi"        'print num("  10  ");'                  "10"
-check "num non valido"       'print num("ciao");'   "Errore a runtime: num(): la stringa non e' un numero valido."
-check "num rifiuta nan"      'print num("nan");'    "Errore a runtime: num(): la stringa non e' un numero valido."
-check "num rifiuta inf"      'print num("inf");'    "Errore a runtime: num(): la stringa non e' un numero valido."
+check "num non valido"       'print num("ciao");'   "[riga 1] Errore a runtime: num(): la stringa non e' un numero valido."
+check "num rifiuta nan"      'print num("nan");'    "[riga 1] Errore a runtime: num(): la stringa non e' un numero valido."
+check "num rifiuta inf"      'print num("inf");'    "[riga 1] Errore a runtime: num(): la stringa non e' un numero valido."
 check "int tronca verso zero" "print int(2.9); print int(-2.9); print int(7/2);" "2
 -2
 3"
-check "int vuole un numero"  'int("x");'            "Errore a runtime: int() vuole un numero."
+check "int vuole un numero"  'int("x");'            "[riga 1] Errore a runtime: int() vuole un numero."
 check "indice stringa"       'var s="ciao"; print s[0]; print s[3];' "c
 o"
 check "indice stringa concat" 'print "abc"[1] + "abc"[2];'  "bc"
-check "indice stringa fuori"  'print "ab"[5];'      "Errore a runtime: indice 5 fuori dai limiti: la stringa ha 2 elementi."
-check "no scrittura su stringa" 'var s="ab"; s[0]="z";' "Errore a runtime: si puo' assegnare per indice solo a un array, non a un valore di tipo stringa."
+check "indice stringa fuori"  'print "ab"[5];'      "[riga 1] Errore a runtime: indice 5 fuori dai limiti: la stringa ha 2 elementi."
+check "no scrittura su stringa" 'var s="ab"; s[0]="z";' "[riga 1] Errore a runtime: si puo' assegnare per indice solo a un array, non a un valore di tipo stringa."
 check "rand in [0,1)"        "print rand() >= 0 && rand() < 1;"  "true"
 check "dado con rand+int"    "var d = int(rand()*6)+1; print d >= 1 && d <= 6;" "true"
 
@@ -315,16 +315,45 @@ check "escape a-capo conta 1" 'print len("a\nb");'   "3"
 check "escape sconosciuto"   'print "z\qw";'         "[riga 1] Errore di sintassi vicino a 'z\qw': sequenza di escape sconosciuta '\q'."
 
 echo "== Errori a runtime =="
-check "divisione per zero"   "print 1 / 0;"       "Errore a runtime: divisione per zero."
-check "modulo per zero"      "print 5 % 0;"       "Errore a runtime: modulo per zero."
-check "variabile non def."   "print y;"           "Errore a runtime: variabile 'y' non definita."
-check "assegn. a non def."   "z = 5;"             "Errore a runtime: assegnamento a variabile 'z' non definita."
-check "tipo sbagliato"       'print "a" - 1;'     "Errore a runtime: l'operatore richiede un numero, ma il valore e' di tipo stringa."
-check "+ tipi misti"         'print 1 + "a";'     "Errore a runtime: '+' vuole due numeri o due stringhe."
-check "ricorsione infinita"  "fun f() { return f(); } print f();"  "Errore a runtime: profondita' massima superata (ricorsione o espressione troppo profonda)."
+check "divisione per zero"   "print 1 / 0;"       "[riga 1] Errore a runtime: divisione per zero."
+check "modulo per zero"      "print 5 % 0;"       "[riga 1] Errore a runtime: modulo per zero."
+check "variabile non def."   "print y;"           "[riga 1] Errore a runtime: variabile 'y' non definita."
+check "assegn. a non def."   "z = 5;"             "[riga 1] Errore a runtime: assegnamento a variabile 'z' non definita."
+check "tipo sbagliato"       'print "a" - 1;'     "[riga 1] Errore a runtime: l'operatore richiede un numero, ma il valore e' di tipo stringa."
+check "+ tipi misti"         'print 1 + "a";'     "[riga 1] Errore a runtime: '+' vuole due numeri o due stringhe."
+check "ricorsione infinita"  "fun f() { return f(); } print f();"  "[riga 1] Errore a runtime: profondita' massima superata (ricorsione o espressione troppo profonda)."
 # Funzione con corpo "pesante" (espressione annidata) ricorsiva a fondo: il guard
 # conta la profondita' REALE di evaluate/execute, non solo le chiamate -> niente crash.
-check "ricorsione pesante"   "fun f(n){ if(n<=0){return [0];} return [f(n-1)[0]+1]; } print f(5000)[0];" "Errore a runtime: profondita' massima superata (ricorsione o espressione troppo profonda)."
+check "ricorsione pesante"   "fun f(n){ if(n<=0){return [0];} return [f(n-1)[0]+1]; } print f(5000)[0];" "[riga 1] Errore a runtime: profondita' massima superata (ricorsione o espressione troppo profonda)."
+
+echo "== Errori a runtime: numero di riga =="
+# La riga giusta anche nei programmi multi-riga: e' l'istruzione in esecuzione.
+check "riga: errore a meta' programma" "var a = 10;
+var b = 0;
+print a;
+var c = a / b;
+print 99;" "10
+[riga 4] Errore a runtime: divisione per zero."
+check "riga: dentro una funzione" "fun dividi(x, y) {
+    return x / y;
+}
+print dividi(6, 2);
+print dividi(1, 0);" "3
+[riga 2] Errore a runtime: divisione per zero."
+check "riga: dopo il ritorno e' del chiamante" "fun f() {
+    return \"testo\";
+}
+var x = f() - 1;" "[riga 4] Errore a runtime: l'operatore richiede un numero, ma il valore e' di tipo stringa."
+check "riga: condizione del while" "var i = 0;
+var s = \"x\";
+while (i < s) {
+    i = i + 1;
+}" "[riga 3] Errore a runtime: l'operatore richiede un numero, ma il valore e' di tipo stringa."
+check "riga: dentro il corpo di un ciclo" "for (var i = 0; i < 3; i = i + 1) {
+    print i;
+    print boh;
+}" "0
+[riga 3] Errore a runtime: variabile 'boh' non definita."
 
 echo "== Errori di sintassi =="
 check "espressione monca"    "print 1 +;"         "[riga 1] Errore di sintassi vicino a ';': Mi aspettavo un numero, un nome, una '(' o un '['."

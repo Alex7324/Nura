@@ -43,6 +43,8 @@ struct Interp {
     Value *tail_args;
     int    tail_argc;
     int depth;         /* profondita' di ricorsione di evaluate()/execute()     */
+    int line;          /* riga dell'istruzione IN ESECUZIONE (0 = ignota):
+                        * la aggiorna execute(), la usano gli errori a runtime */
     /* NB: stringhe, array e ambienti sono tutti oggetti gestiti dal garbage
      * collector (vedi gc.c): niente piu' arene manuali qui dentro. */
 };
@@ -98,7 +100,11 @@ static void runtime_error(Interp *it, const char *message) {
      * anche quando l'output e' rediretto in un file o in una pipe (dove stdout
      * e' bufferizzato e altrimenti uscirebbe dopo). */
     fflush(stdout);
-    fprintf(stderr, "Errore a runtime: %s\n", message);
+    /* Con la riga, nello stesso formato degli errori di sintassi. */
+    if (it->line > 0)
+        fprintf(stderr, "[riga %d] Errore a runtime: %s\n", it->line, message);
+    else
+        fprintf(stderr, "Errore a runtime: %s\n", message);
 }
 
 /* Valida un accesso arr[i]: controlla che arr_v sia un array, che idx_v sia
@@ -685,8 +691,11 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
 
             /* L'ambiente del chiamante non e' nella catena del nuovo scope:
              * lo proteggo per tutto il trampolino e lo ripristino UNA volta,
-             * alla fine (non a ogni giro). */
+             * alla fine (non a ogni giro). Stessa cosa per la RIGA corrente:
+             * il corpo la sposta sulle proprie istruzioni; al ritorno, un
+             * errore nel resto dell'espressione deve puntare al CHIAMANTE. */
             Env *caller_env = it->env;
+            int caller_line = it->line;
             gc_push_temp((Obj *)caller_env);
 
             /* Innesco: valuto gli argomenti della prima chiamata e li deposito
@@ -761,6 +770,7 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
             }
 
             it->env = caller_env;
+            it->line = caller_line;
             gc_pop_temp(1);   /* caller_env */
 
             Value result;
@@ -856,6 +866,10 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
 
 /* Wrapper col guard-rail di profondita' (gemello di quello di evaluate). */
 static void execute(Stmt *stmt, Interp *it) {
+    /* IL punto che tiene aggiornata la riga corrente: qualunque errore
+     * scatti da qui in giu' (anche in fondo a un'espressione) sapra' dire
+     * in quale istruzione stava succedendo. */
+    if (stmt->line > 0) it->line = stmt->line;
     if (it->depth >= MAX_DEPTH) {
         runtime_error(it, "profondita' massima superata (ricorsione o espressione troppo profonda).");
         return;
@@ -943,6 +957,9 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                  * una sola istruzione (senza blocco), che non passerebbero dal
                  * punto di raccolta di STMT_BLOCK. */
                 gc_maybe_collect();
+                /* La condizione sta sulla riga del while, non sull'ultima
+                 * istruzione del corpo del giro precedente. */
+                if (stmt->line > 0) it->line = stmt->line;
                 Value cond = evaluate(stmt->as.while_stmt.condition, it);
                 if (it->had_error) break;
                 if (!is_truthy(cond)) break;
@@ -967,6 +984,8 @@ static void execute_impl(Stmt *stmt, Interp *it) {
 
             while (!it->had_error && !it->is_returning && !it->is_tail_calling) {
                 gc_maybe_collect();
+                /* Condizione e incremento stanno sulla riga del for. */
+                if (stmt->line > 0) it->line = stmt->line;
                 if (stmt->as.for_stmt.condition != NULL) {
                     Value cond = evaluate(stmt->as.for_stmt.condition, it);
                     if (it->had_error) break;
@@ -980,6 +999,7 @@ static void execute_impl(Stmt *stmt, Interp *it) {
                 /* L'incremento gira SEMPRE a fine giro, anche dopo un continue:
                  * e' la differenza chiave rispetto alla vecchia traduzione in while. */
                 if (stmt->as.for_stmt.increment != NULL) {
+                    if (stmt->line > 0) it->line = stmt->line;   /* riga del for */
                     evaluate(stmt->as.for_stmt.increment, it);
                     if (it->had_error) break;
                 }
@@ -1116,6 +1136,7 @@ void run_program(Program *program, Env *env, int *had_error) {
     it.tail_args = NULL;
     it.tail_argc = 0;
     it.depth = 0;
+    it.line = 0;
 
     /* Rendo disponibili le funzioni native (len, push, ...) nell'ambiente
      * globale, prima di eseguire il programma. */
