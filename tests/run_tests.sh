@@ -203,6 +203,53 @@ check "recur senza chiamata"  "fun f(n){ recur n-1; } print f(1);"              
 check "recur su nativa"       "fun f(){ recur len([1]); } print f();"              "Errore a runtime: 'recur' vuole una funzione definita nel linguaggio (non una nativa)."
 check "recur arieta' errata"  "fun g(a,b){ return a+b; } fun f(n){ recur g(n); } print f(1);" "Errore a runtime: la funzione 'g' vuole 2 argomenti, ne hai passati 1."
 
+echo "== trace / why: provenienza dei valori =="
+# 'trace x' registra la storia delle assegnazioni; 'why x' stampa l'albero
+# causale: chi ha prodotto il valore, a partire da quali altri valori.
+check "why: catena semplice" "var a = 3;
+var b = 4;
+var x = 0;
+trace x;
+x = a * b + 2;
+x = x * 10;
+why x;" "x vale 140
+  perche' (riga 6): x = x * 10
+    dove x valeva 14
+      perche' (riga 5): x = (a * b) + 2
+        dove a valeva 3 (riga 1)
+        dove b valeva 4 (riga 2)"
+check "why: attraversa le variabili" "var base = 10;
+trace base;
+base = base + 5;
+var tot = 0;
+trace tot;
+tot = base * 2;
+why tot;" "tot vale 30
+  perche' (riga 6): tot = base * 2
+    dove base valeva 15
+      perche' (riga 3): base = base + 5
+        dove base valeva 10 (riga 1)"
+check "why: parametro di funzione" "fun f(n) { var r = 0; trace r; r = n * 2; why r; return r; } print f(21);" "r vale 42
+  perche' (riga 1): r = n * 2
+    dove n valeva 21
+42"
+check "why: nessuna storia ancora"  "var x = 5; trace x; why x;" "x vale 5
+  (nessuna assegnazione registrata da quando e' tracciata)"
+check "why: ciclo, storia limitata" "var i = 0; trace i; while (i < 3) { i = i + 1; } why i;" "i vale 3
+  perche' (riga 1): i = i + 1
+    dove i valeva 2
+      perche' (riga 1): i = i + 1
+        dove i valeva 1
+          perche' (riga 1): i = i + 1
+            dove i valeva 0 (riga 1)"
+# Vincoli e errori.
+check "why su var non tracciata"   "var x = 1; why x;"  "Errore a runtime: why: la variabile 'x' non e' tracciata (serve prima 'trace x;')."
+check "trace su var non definita"  "trace boh;"          "Errore a runtime: trace: la variabile 'boh' non e' definita."
+check "why su var non definita"    "why boh;"            "Errore a runtime: why: la variabile 'boh' non e' definita."
+# Robustezza: un ciclo LUNGO con trace non accumula memoria (tetto di storia:
+# i nodi scollegati diventano spazzatura per il GC) e il programma resta veloce.
+check "trace: ciclo lungo limitato" "var i = 0; trace i; while (i < 200000) { i = i + 1; } print i;" "200000"
+
 echo "== Garbage collector (Fase 9) =="
 # Cicli lunghi che creano tanta spazzatura: il GC la raccoglie, il risultato
 # resta corretto e non si esaurisce la memoria (prima crashava con 'Memoria esaurita').

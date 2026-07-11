@@ -77,10 +77,11 @@ Expr *ast_variable(const char *name, int length) {
     return e;
 }
 
-Expr *ast_assign(const char *name, int length, Expr *value) {
+Expr *ast_assign(const char *name, int length, Expr *value, int line) {
     Expr *e = new_expr(EXPR_ASSIGN);
     e->as.assign.name = copy_name(name, length);
     e->as.assign.value = value;
+    e->as.assign.line = line;   /* serve a trace/why per dire DOVE e' avvenuto */
     return e;
 }
 
@@ -361,10 +362,11 @@ static Stmt *new_stmt(StmtType type) {
     return s;
 }
 
-Stmt *stmt_var(const char *name, int length, Expr *initializer) {
+Stmt *stmt_var(const char *name, int length, Expr *initializer, int line) {
     Stmt *s = new_stmt(STMT_VAR);
     s->as.var.name = copy_name(name, length);
     s->as.var.initializer = initializer;
+    s->as.var.line = line;   /* serve a trace/why per dire DOVE e' avvenuto */
     return s;
 }
 
@@ -434,6 +436,18 @@ Stmt *stmt_recur(Expr *call) {
     return s;
 }
 
+Stmt *stmt_trace(const char *name, int length) {
+    Stmt *s = new_stmt(STMT_TRACE);
+    s->as.trace.name = copy_name(name, length);
+    return s;
+}
+
+Stmt *stmt_why(const char *name, int length) {
+    Stmt *s = new_stmt(STMT_WHY);
+    s->as.why.name = copy_name(name, length);
+    return s;
+}
+
 void stmt_free(Stmt *stmt) {
     if (stmt == NULL) return;
     switch (stmt->type) {
@@ -482,6 +496,12 @@ void stmt_free(Stmt *stmt) {
         case STMT_RECUR:
             ast_free(stmt->as.recur.call);
             break;
+        case STMT_TRACE:
+            free(stmt->as.trace.name);
+            break;
+        case STMT_WHY:
+            free(stmt->as.why.name);
+            break;
     }
     free(stmt);
 }
@@ -521,4 +541,177 @@ void program_free(Program *program) {
     program->statements = NULL;
     program->count = 0;
     program->capacity = 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  AST -> testo: ricostruire il sorgente di un'espressione            */
+/*  (usato da trace/why per mostrare CHI ha prodotto un valore)        */
+/* ------------------------------------------------------------------ */
+
+/* Il simbolo di un operatore. Solo quelli che possono comparire in una
+ * espressione (unari, binari, logici). */
+static const char *op_symbol(TokenType op) {
+    switch (op) {
+        case TOKEN_PLUS:    return "+";
+        case TOKEN_MINUS:   return "-";
+        case TOKEN_STAR:    return "*";
+        case TOKEN_SLASH:   return "/";
+        case TOKEN_PERCENT: return "%";
+        case TOKEN_EQ:      return "==";
+        case TOKEN_NEQ:     return "!=";
+        case TOKEN_LT:      return "<";
+        case TOKEN_LE:      return "<=";
+        case TOKEN_GT:      return ">";
+        case TOKEN_GE:      return ">=";
+        case TOKEN_AND:     return "&&";
+        case TOKEN_OR:      return "||";
+        case TOKEN_BANG:    return "!";
+        default:            return "?";
+    }
+}
+
+/* Scrittore a capienza fissa: appende senza mai sforare, e quando lo spazio
+ * finisce chiude con "..." (il testo serve a spiegare, non a essere completo). */
+typedef struct {
+    char *buf;
+    int   cap;
+    int   len;
+    int   truncated;
+} TextWriter;
+
+static void tw_put(TextWriter *w, const char *s) {
+    if (w->truncated) return;
+    int slen = (int)strlen(s);
+    /* -4: riservo lo spazio per "..." + '\0' in caso di troncamento */
+    if (w->len + slen > w->cap - 4) {
+        memcpy(w->buf + w->len, "...", 4);
+        w->len += 3;
+        w->truncated = 1;
+        return;
+    }
+    memcpy(w->buf + w->len, s, (size_t)slen);
+    w->len += slen;
+    w->buf[w->len] = '\0';
+}
+
+/* Come tw_put ma RI-ESCAPA i caratteri speciali: gli escape delle stringhe
+ * (\n, \t...) sono gia' stati tradotti dal parser in caratteri veri, e qui
+ * vanno rimessi in forma leggibile su una riga sola. */
+static void tw_put_escaped(TextWriter *w, const char *s) {
+    char one[3] = {0, 0, 0};
+    for (; *s != '\0'; s++) {
+        if      (*s == '\n') tw_put(w, "\\n");
+        else if (*s == '\t') tw_put(w, "\\t");
+        else if (*s == '\r') tw_put(w, "\\r");
+        else if (*s == '"')  tw_put(w, "\\\"");
+        else if (*s == '\\') tw_put(w, "\\\\");
+        else { one[0] = *s; tw_put(w, one); }
+    }
+}
+
+#define EXPR_TEXT_MAX_DEPTH 20   /* oltre: "..." (il testo e' una spiegazione) */
+
+static void expr_text_rec(Expr *e, TextWriter *w, int depth);
+
+/* Un figlio binario/logico va tra PARENTESI: l'albero conserva la struttura
+ * ma non le parentesi originali, e "a * b + 2" scritto piatto mentirebbe
+ * sull'ordine. "(a * b) + 2" invece dice la verita'. */
+static void expr_text_child(Expr *e, TextWriter *w, int depth) {
+    int wrap = (e->type == EXPR_BINARY || e->type == EXPR_LOGICAL);
+    if (wrap) tw_put(w, "(");
+    expr_text_rec(e, w, depth);
+    if (wrap) tw_put(w, ")");
+}
+
+static void expr_text_rec(Expr *e, TextWriter *w, int depth) {
+    if (w->truncated) return;
+    if (depth >= EXPR_TEXT_MAX_DEPTH) { tw_put(w, "..."); w->truncated = 1; return; }
+
+    char tmp[64];
+    switch (e->type) {
+        case EXPR_NUMBER: {
+            double n = e->as.number.value;
+            if (n == (double)(long long)n && n > -1e15 && n < 1e15)
+                snprintf(tmp, sizeof(tmp), "%.0f", n);
+            else
+                snprintf(tmp, sizeof(tmp), "%g", n);
+            tw_put(w, tmp);
+            break;
+        }
+        case EXPR_BOOL:
+            if (e->as.boolean.value) tw_put(w, "true");
+            else                     tw_put(w, "false");
+            break;
+        case EXPR_STRING:
+            tw_put(w, "\"");
+            tw_put_escaped(w, e->as.string.value);
+            tw_put(w, "\"");
+            break;
+        case EXPR_VARIABLE:
+            tw_put(w, e->as.variable.name);
+            break;
+        case EXPR_UNARY:
+            tw_put(w, op_symbol(e->as.unary.op));
+            expr_text_child(e->as.unary.right, w, depth + 1);
+            break;
+        case EXPR_BINARY:
+            expr_text_child(e->as.binary.left, w, depth + 1);
+            tw_put(w, " ");
+            tw_put(w, op_symbol(e->as.binary.op));
+            tw_put(w, " ");
+            expr_text_child(e->as.binary.right, w, depth + 1);
+            break;
+        case EXPR_LOGICAL:
+            expr_text_child(e->as.logical.left, w, depth + 1);
+            tw_put(w, " ");
+            tw_put(w, op_symbol(e->as.logical.op));
+            tw_put(w, " ");
+            expr_text_child(e->as.logical.right, w, depth + 1);
+            break;
+        case EXPR_ASSIGN:
+            tw_put(w, e->as.assign.name);
+            tw_put(w, " = ");
+            expr_text_rec(e->as.assign.value, w, depth + 1);
+            break;
+        case EXPR_CALL:
+            expr_text_rec(e->as.call.callee, w, depth + 1);
+            tw_put(w, "(");
+            for (int i = 0; i < e->as.call.arg_count; i++) {
+                if (i > 0) tw_put(w, ", ");
+                expr_text_rec(e->as.call.args[i], w, depth + 1);
+            }
+            tw_put(w, ")");
+            break;
+        case EXPR_ARRAY:
+            tw_put(w, "[");
+            for (int i = 0; i < e->as.array.count; i++) {
+                if (i > 0) tw_put(w, ", ");
+                expr_text_rec(e->as.array.elements[i], w, depth + 1);
+            }
+            tw_put(w, "]");
+            break;
+        case EXPR_INDEX:
+            expr_text_child(e->as.index.array, w, depth + 1);
+            tw_put(w, "[");
+            expr_text_rec(e->as.index.index, w, depth + 1);
+            tw_put(w, "]");
+            break;
+        case EXPR_INDEX_SET:
+            expr_text_child(e->as.index_set.array, w, depth + 1);
+            tw_put(w, "[");
+            expr_text_rec(e->as.index_set.index, w, depth + 1);
+            tw_put(w, "] = ");
+            expr_text_rec(e->as.index_set.value, w, depth + 1);
+            break;
+    }
+}
+
+void ast_expr_text(Expr *expr, char *buf, int cap) {
+    TextWriter w;
+    w.buf = buf;
+    w.cap = cap;
+    w.len = 0;
+    w.truncated = 0;
+    buf[0] = '\0';
+    expr_text_rec(expr, &w, 0);
 }

@@ -1,0 +1,32 @@
+// Il codice che si spiega: 'trace' e 'why'.
+// 'trace x;' fa si' che la variabile registri la storia delle sue assegnazioni;
+// 'why x;' stampa l'albero causale: chi le ha dato quel valore, a partire da
+// quali altri valori, riga per riga.
+// Esegui con:  nura examples/algoritmi/spiegami.nura
+
+// --- 1. Un calcolo a piu' passi: da dove viene il prezzo finale? ---
+var prezzo_base = 100;
+var sconto = 20;
+trace sconto;
+sconto = sconto + 5;                 // promozione extra
+
+var prezzo = 0;
+trace prezzo;
+prezzo = prezzo_base - sconto;
+prezzo = prezzo + prezzo / 10;       // tasse: +10%
+
+print "prezzo finale: " + str(prezzo);
+why prezzo;                          // ...e la spiegazione completa
+
+// --- 2. Un bug classico: l'accumulatore che non torna ---
+// La media di [6, 7, 8] dovrebbe essere 7. Se il risultato e' strano,
+// invece di riempire il codice di print... chiediglielo.
+var voti = [6, 7, 8];
+var somma = 0;
+trace somma;
+for (var i = 0; i < len(voti); i = i + 1) {
+    somma = somma + voti[i];
+}
+var media = somma / len(voti);
+print "media: " + str(media);
+why somma;                           // ogni passo dell'accumulo, coi valori

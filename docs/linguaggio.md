@@ -17,8 +17,9 @@ vedi il [README](../README.md).
 9. [Controllo di flusso](#9-controllo-di-flusso)
 10. [Funzioni](#10-funzioni)
 11. [Closures](#11-closures)
-12. [Errori](#12-errori)
-13. [Appendice: grammatica](#13-appendice-grammatica)
+12. [Il codice che si spiega: `trace` e `why`](#12-il-codice-che-si-spiega-trace-e-why)
+13. [Errori](#13-errori)
+14. [Appendice: grammatica](#14-appendice-grammatica)
 
 ---
 
@@ -494,7 +495,72 @@ print d();                   // 1   (contatore indipendente, con la sua n)
 > push(fs, cattura(i));                                // ora dà 0, 1, 2
 > ```
 
-## 12. Errori
+## 12. Il codice che si spiega: `trace` e `why`
+
+La domanda più frequente di chi programma è: *"ma perché questa variabile vale
+così?!"*. Nura è (forse) l'unico linguaggio che risponde da solo. Ogni variabile
+può portare con sé la **storia** di come ha ottenuto il suo valore — e tu puoi
+chiedergliela.
+
+Si attiva con `trace` e si interroga con `why`:
+
+```
+var a = 3;
+var b = 4;
+var x = 0;
+trace x;              // da ora, x ricorda la sua storia
+x = a * b + 2;
+x = x * 10;
+why x;                // e ora raccontamela
+```
+
+Output:
+
+```
+x vale 140
+  perche' (riga 6): x = x * 10
+    dove x valeva 14
+      perche' (riga 5): x = (a * b) + 2
+        dove a valeva 3 (riga 1)
+        dove b valeva 4 (riga 2)
+```
+
+Ogni assegnazione a una variabile tracciata registra un **nodo di provenienza**:
+l'espressione che ha prodotto il valore, la riga, e le variabili lette (col loro
+valore *di quel momento*). `why` percorre i nodi e stampa l'albero causale.
+
+La storia **attraversa le variabili**: se anche una dipendenza è tracciata,
+il suo ramo si apre a sua volta:
+
+```
+var base = 10;
+trace base;
+base = base + 5;
+var tot = 0;
+trace tot;
+tot = base * 2;
+why tot;              // spiega tot... e anche da dove veniva base
+```
+
+### Cose da sapere
+
+- **Fotografie, non riferimenti.** La storia salva i valori *com'erano al
+  momento dell'assegnazione*, già resi in testo. Se dopo modifichi un array
+  con `push`, la storia continua a dire la verità sul passato.
+- **La storia ha un tetto** (~20 livelli): un contatore in un ciclo da un
+  milione di giri non si porta dietro un milione di nodi — i più vecchi
+  vengono dimenticati (lo dice: *"storia piu' vecchia dimenticata"*) e la
+  memoria resta piccola, perché il garbage collector li raccoglie.
+- **Si paga solo se si usa**: le variabili non tracciate non registrano nulla.
+- `trace`/`why` vogliono una variabile **esistente**; `why` vuole una variabile
+  **tracciata** (altrimenti errore, con il suggerimento di fare prima `trace`).
+- Viene registrata l'assegnazione **alla variabile intera** (`x = ...` o
+  `var x = ...`); le scritture per indice (`arr[i] = v`) non aggiungono nodi.
+- Le espressioni stampate sono **ricostruite dall'albero sintattico**: le
+  parentesi mostrano la struttura vera (`x = (a * b) + 2`), che è quello che
+  conta quando stai cercando un bug.
+
+## 13. Errori
 
 Nura distingue due tipi di errore, entrambi stampati con il numero di riga quando
 possibile.
@@ -510,17 +576,19 @@ possibile.
   print 1 / 0;   →  Errore a runtime: divisione per zero.
   ```
 
-## 13. Appendice: grammatica
+## 14. Appendice: grammatica
 
 Grammatica di Nura in forma sintetica (`*` = zero o più, `?` = facoltativo).
 
 ```
 programma   -> istruzione* EOF
 
-istruzione  -> varDecl | funDecl | print | if | while | for | break | continue | return | recur | blocco | exprStmt
+istruzione  -> varDecl | funDecl | print | if | while | for | break | continue | return | recur | trace | why | blocco | exprStmt
 break       -> "break" ";"
 continue    -> "continue" ";"
 recur       -> "recur" chiamata ";"
+trace       -> "trace" IDENT ";"
+why         -> "why" IDENT ";"
 varDecl     -> "var" IDENT "=" espressione ";"
 funDecl     -> "fun" IDENT "(" parametri? ")" blocco
 parametri   -> IDENT ( "," IDENT )*

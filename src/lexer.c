@@ -198,6 +198,8 @@ static TokenType identifier_type(Lexer *lexer) {
         { "continue", TOKEN_CONTINUE },
         { "return", TOKEN_RETURN },
         { "recur",  TOKEN_RECUR  },
+        { "trace",  TOKEN_TRACE  },
+        { "why",    TOKEN_WHY    },
         { "print",  TOKEN_PRINT  },
         { "true",   TOKEN_TRUE   },
         { "false",  TOKEN_FALSE  },

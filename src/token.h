@@ -27,6 +27,8 @@ typedef enum {
     TOKEN_CONTINUE,
     TOKEN_RETURN,
     TOKEN_RECUR,       /* recur f(x): chiamata in coda garantita (TCO)         */
+    TOKEN_TRACE,       /* trace x: registra la storia delle assegnazioni a x   */
+    TOKEN_WHY,         /* why x: stampa l'albero causale di x                  */
     TOKEN_PRINT,
     TOKEN_TRUE,
     TOKEN_FALSE,

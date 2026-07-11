@@ -24,6 +24,8 @@ const char *token_type_name(TokenType type) {
         case TOKEN_CONTINUE:   return "CONTINUE";
         case TOKEN_RETURN:     return "RETURN";
         case TOKEN_RECUR:      return "RECUR";
+        case TOKEN_TRACE:      return "TRACE";
+        case TOKEN_WHY:        return "WHY";
         case TOKEN_PRINT:      return "PRINT";
         case TOKEN_TRUE:       return "TRUE";
         case TOKEN_FALSE:      return "FALSE";

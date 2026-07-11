@@ -1,5 +1,6 @@
 #include "eval.h"
 #include "gc.h"
+#include "prov.h"   /* provenienza dei valori: trace / why */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -271,6 +272,141 @@ static void stringify(Value v, char **buf, int *len, int *cap, int depth) {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Provenienza (trace / why): la storia delle variabili               */
+/* ------------------------------------------------------------------ */
+
+#define PROV_VAL_TEXT_MAX 80    /* le fotografie in testo restano corte */
+
+static char *dup_cstr(const char *s) {
+    size_t n = strlen(s) + 1;
+    char *copy = malloc(n);
+    if (copy == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    memcpy(copy, s, n);
+    return copy;
+}
+
+/* La FOTOGRAFIA in testo di un valore (buffer malloc, va liberato o passato a
+ * un nodo). E' il cuore della scelta di design: la storia salva com'era il
+ * valore ADESSO, reso in testo. Un puntatore mentirebbe (gli array mutano). */
+static char *snapshot_value_text(Value v) {
+    char *buf = NULL; int len = 0, cap = 0;
+    stringify(v, &buf, &len, &cap, 0);
+    if (buf == NULL) return dup_cstr("");
+    if (len > PROV_VAL_TEXT_MAX) {
+        memcpy(buf + PROV_VAL_TEXT_MAX - 3, "...", 4);   /* tronca con "..." */
+    }
+    return buf;
+}
+
+/* Raccoglie i nomi delle variabili LETTE da un'espressione (unici, al massimo
+ * PROV_MAX_DEPS): sono le dipendenze del valore prodotto. I nomi puntano
+ * dentro l'AST: niente da liberare. */
+static void collect_deps(Expr *e, const char **names, int *n) {
+    if (e == NULL) return;
+    switch (e->type) {
+        case EXPR_NUMBER:
+        case EXPR_BOOL:
+        case EXPR_STRING:
+            break;   /* i letterali non dipendono da nessuno */
+        case EXPR_VARIABLE: {
+            for (int i = 0; i < *n; i++)
+                if (strcmp(names[i], e->as.variable.name) == 0) return;
+            if (*n < PROV_MAX_DEPS) names[(*n)++] = e->as.variable.name;
+            break;
+        }
+        case EXPR_UNARY:
+            collect_deps(e->as.unary.right, names, n);
+            break;
+        case EXPR_BINARY:
+            collect_deps(e->as.binary.left, names, n);
+            collect_deps(e->as.binary.right, names, n);
+            break;
+        case EXPR_LOGICAL:
+            collect_deps(e->as.logical.left, names, n);
+            collect_deps(e->as.logical.right, names, n);
+            break;
+        case EXPR_ASSIGN:
+            collect_deps(e->as.assign.value, names, n);
+            break;
+        case EXPR_CALL:
+            /* Il nome della funzione non e' un "dato che fluisce": salto il
+             * callee se e' una semplice variabile, guardo solo gli argomenti. */
+            if (e->as.call.callee->type != EXPR_VARIABLE)
+                collect_deps(e->as.call.callee, names, n);
+            for (int i = 0; i < e->as.call.arg_count; i++)
+                collect_deps(e->as.call.args[i], names, n);
+            break;
+        case EXPR_ARRAY:
+            for (int i = 0; i < e->as.array.count; i++)
+                collect_deps(e->as.array.elements[i], names, n);
+            break;
+        case EXPR_INDEX:
+            collect_deps(e->as.index.array, names, n);
+            collect_deps(e->as.index.index, names, n);
+            break;
+        case EXPR_INDEX_SET:
+            collect_deps(e->as.index_set.array, names, n);
+            collect_deps(e->as.index_set.index, names, n);
+            collect_deps(e->as.index_set.value, names, n);
+            break;
+    }
+}
+
+/* Costruisce il nodo di storia per "name = rhs" (con il risultato gia'
+ * calcolato). VA CHIAMATA PRIMA di scrivere il nuovo valore nella variabile:
+ * le dipendenze fotografano i valori DI ADESSO (per 'x = x * 10' serve
+ * la x vecchia, non la nuova).
+ *
+ * Sicurezza GC: qui si alloca il nodo (gc_new_prov) e poi solo malloc di
+ * testo; nessuna raccolta puo' scattare a meta' (il GC gira solo ai confini
+ * tra istruzioni). Il chiamante aggancia subito il nodo alla Entry. */
+static Prov *build_prov(Interp *it, const char *name, Expr *rhs, int line, Value result) {
+    Prov *node = gc_new_prov();
+    node->line = line;
+    node->target = dup_cstr(name);
+
+    char text[144];
+    ast_expr_text(rhs, text, (int)sizeof(text));
+    node->expr_text = dup_cstr(text);
+    node->val_text = snapshot_value_text(result);
+
+    const char *dep_names[PROV_MAX_DEPS];
+    int n = 0;
+    collect_deps(rhs, dep_names, &n);
+
+    if (n > 0) {
+        node->deps = malloc(sizeof(ProvDep) * (size_t)n);
+        if (node->deps == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    }
+    int depth = 1;
+    for (int i = 0; i < n; i++) {
+        Entry *de = env_find(it->env, dep_names[i]);
+        if (de == NULL) continue;   /* sparita? impossibile: la RHS l'ha appena letta */
+        ProvDep *d = &node->deps[node->dep_count++];
+        d->name = dup_cstr(dep_names[i]);
+        d->val_text = snapshot_value_text(de->value);
+        d->line = de->last_line;
+        d->link = NULL;
+        d->truncated = 0;
+        if (de->prov != NULL) {
+            /* Il TETTO di profondita': oltre PROV_MAX_DEPTH livelli il nuovo
+             * nodo non si collega alla storia vecchia, che (se nessun altro
+             * la raggiunge) diventa spazzatura per il GC. Cosi' un contatore
+             * in un ciclo da un milione di giri tiene ~20 nodi, non un milione. */
+            if (de->prov->depth >= PROV_MAX_DEPTH) {
+                d->truncated = 1;
+            } else {
+                d->link = de->prov;
+                if (1 + de->prov->depth > depth) depth = 1 + de->prov->depth;
+            }
+        }
+    }
+    node->depth = depth;
+    gc_count_bytes(prov_extra_bytes(node));   /* contabilita' della soglia GC */
+    return node;
+}
+
 static Value native_str(Interp *it, int argc, Value *args) {
     (void)it; (void)argc;
     char *buf = NULL; int len = 0, cap = 0;
@@ -396,7 +532,11 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
         case EXPR_ASSIGN: {
             Value v = evaluate(expr->as.assign.value, it);
             if (it->had_error) return v;
-            if (!env_assign(it->env, expr->as.assign.name, v)) {
+            /* Trovo la voce PRIMA di scrivere: se la variabile e' tracciata
+             * (trace), il nodo di storia va costruito ADESSO, con i valori
+             * vecchi delle dipendenze (per 'x = x * 10' serve la x di prima). */
+            Entry *e = env_find(it->env, expr->as.assign.name);
+            if (e == NULL) {
                 char msg[128];
                 snprintf(msg, sizeof(msg),
                          "assegnamento a variabile '%s' non definita.",
@@ -404,6 +544,13 @@ static Value evaluate_impl(Expr *expr, Interp *it) {
                 runtime_error(it, msg);
                 return value_number(0);
             }
+            Prov *node = NULL;
+            if (e->tracked)
+                node = build_prov(it, expr->as.assign.name,
+                                  expr->as.assign.value, expr->as.assign.line, v);
+            env_assign(it->env, expr->as.assign.name, v);
+            e->last_line = expr->as.assign.line;
+            if (node != NULL) e->prov = node;
             return v;
         }
 
@@ -723,7 +870,18 @@ static void execute_impl(Stmt *stmt, Interp *it) {
 
         case STMT_VAR: {
             Value v = evaluate(stmt->as.var.initializer, it);
-            if (!it->had_error) env_define(it->env, stmt->as.var.name, v);
+            if (!it->had_error) {
+                env_define(it->env, stmt->as.var.name, v);
+                /* Per trace/why: ricordo DOVE e' stata definita. Se una 'var'
+                 * ridefinisce una variabile gia' tracciata, anche questo e'
+                 * un pezzo della sua storia. */
+                Entry *e = env_find(it->env, stmt->as.var.name);
+                e->last_line = stmt->as.var.line;
+                if (e->tracked)
+                    e->prov = build_prov(it, stmt->as.var.name,
+                                         stmt->as.var.initializer,
+                                         stmt->as.var.line, v);
+            }
             break;
         }
 
@@ -891,6 +1049,50 @@ static void execute_impl(Stmt *stmt, Interp *it) {
             it->tail_argc   = argc;
             gc_pop_temp(pushed);      /* callee e args ora coperti da tail_* */
             it->is_tail_calling = 1;
+            break;
+        }
+
+        case STMT_TRACE: {
+            Entry *e = env_find(it->env, stmt->as.trace.name);
+            if (e == NULL) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "trace: la variabile '%s' non e' definita.",
+                         stmt->as.trace.name);
+                runtime_error(it, msg);
+                break;
+            }
+            e->tracked = 1;   /* da ora ogni assegnazione registra la storia */
+            break;
+        }
+
+        case STMT_WHY: {
+            Entry *e = env_find(it->env, stmt->as.why.name);
+            if (e == NULL) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "why: la variabile '%s' non e' definita.",
+                         stmt->as.why.name);
+                runtime_error(it, msg);
+                break;
+            }
+            if (!e->tracked) {
+                char msg[160];
+                snprintf(msg, sizeof(msg),
+                         "why: la variabile '%s' non e' tracciata (serve prima 'trace %s;').",
+                         stmt->as.why.name, stmt->as.why.name);
+                runtime_error(it, msg);
+                break;
+            }
+            /* Il presente... */
+            char *val = snapshot_value_text(e->value);
+            printf("%s vale %s\n", stmt->as.why.name, val);
+            free(val);
+            /* ...e il passato: l'albero causale. */
+            if (e->prov == NULL)
+                printf("  (nessuna assegnazione registrata da quando e' tracciata)\n");
+            else
+                prov_print(e->prov, 1);
             break;
         }
     }

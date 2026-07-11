@@ -1,6 +1,7 @@
 #include "gc.h"
 #include "value.h"
 #include "env.h"
+#include "prov.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,6 +81,8 @@ static size_t obj_size(Obj *o) {
             return sizeof(Env);   /* i bucket sono inline nella struct */
         case OBJ_STRING:
             return sizeof(ObjString) + (size_t)((ObjString *)o)->length + 1;
+        case OBJ_PROV:
+            return sizeof(Prov) + prov_extra_bytes((Prov *)o);
     }
     return 0;
 }
@@ -133,6 +136,21 @@ struct Env *gc_new_env(void) {
     Env *e = alloc_object(sizeof(Env), OBJ_ENV);
     env_init(e);
     return e;
+}
+
+struct Prov *gc_new_prov(void) {
+    Prov *p = alloc_object(sizeof(Prov), OBJ_PROV);
+    p->line = 0;
+    p->target = NULL;
+    p->expr_text = NULL;
+    p->val_text = NULL;
+    p->deps = NULL;
+    p->dep_count = 0;
+    p->depth = 1;
+    /* I buffer (stringhe, deps) li aggiunge eval.c riempiendo il nodo;
+     * la loro taglia va segnalata con gc_count_bytes per tenere precisa
+     * la soglia di raccolta (simmetrica a obj_size). */
+    return p;
 }
 
 struct ObjString *gc_new_string(const char *chars, int length) {
@@ -196,13 +214,25 @@ static void blacken(Obj *o) {
         case OBJ_ENV: {
             Env *e = (Env *)o;
             for (int i = 0; i < ENV_CAPACITY; i++)
-                for (Entry *en = e->buckets[i]; en != NULL; en = en->next)
+                for (Entry *en = e->buckets[i]; en != NULL; en = en->next) {
                     mark_value(en->value);
+                    /* la storia della variabile (trace/why) vive finche'
+                     * vive la sua voce */
+                    gc_mark_object((Obj *)en->prov);
+                }
             gc_mark_env(e->enclosing);   /* anche lo scope che lo racchiude */
             break;
         }
         case OBJ_STRING:
             break;   /* una stringa non referenzia altri oggetti: e' una foglia */
+        case OBJ_PROV: {
+            /* Un nodo di storia tiene vivi i nodi a cui si collega (i valori
+             * dentro sono fotografie in TESTO: niente altro da marcare). */
+            Prov *p = (Prov *)o;
+            for (int i = 0; i < p->dep_count; i++)
+                gc_mark_object((Obj *)p->deps[i].link);
+            break;
+        }
     }
 }
 
@@ -220,6 +250,19 @@ static void free_object(Obj *o) {
             ObjString *s = (ObjString *)o;
             free(s->chars);
             free(s);
+            break;
+        }
+        case OBJ_PROV: {
+            Prov *p = (Prov *)o;
+            free(p->target);
+            free(p->expr_text);
+            free(p->val_text);
+            for (int i = 0; i < p->dep_count; i++) {
+                free(p->deps[i].name);
+                free(p->deps[i].val_text);
+            }
+            free(p->deps);
+            free(p);
             break;
         }
     }

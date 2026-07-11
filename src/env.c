@@ -66,6 +66,9 @@ void env_define(Env *env, const char *name, Value value) {
     if (e == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
     e->name = copy_string(name);
     e->value = value_copy(value);   /* copia posseduta dall'ambiente */
+    e->tracked = 0;                 /* provenienza (trace/why): spenta       */
+    e->last_line = 0;
+    e->prov = NULL;
     e->next = env->buckets[index];  /* il vecchio primo diventa il secondo */
     env->buckets[index] = e;        /* la nuova voce diventa la testa      */
     env->count++;
@@ -77,6 +80,13 @@ int env_get(Env *env, const char *name, Value *out) {
     /* non trovata qui: cerchiamo nello scope che ci racchiude */
     if (env->enclosing != NULL) return env_get(env->enclosing, name, out);
     return 0;
+}
+
+Entry *env_find(Env *env, const char *name) {
+    Entry *e = find_entry(env, name);
+    if (e != NULL) return e;
+    if (env->enclosing != NULL) return env_find(env->enclosing, name);
+    return NULL;
 }
 
 int env_assign(Env *env, const char *name, Value value) {

@@ -388,6 +388,13 @@ static void n_execute(Stmt *s, Env *env, int n) {
             break;
         }
 
+        case STMT_TRACE:
+        case STMT_WHY:
+            /* La provenienza (trace/why) vive nell'interprete vero (eval.c);
+             * questo tracer didattico non la implementa. */
+            printf("\n> istruzione %d:  trace/why (non supportati da questo tracer)\n", n);
+            break;
+
         case STMT_RECUR: {
             /* Nell'interprete vero 'recur' e' una chiamata in coda ottimizzata
              * (trampolino, vedi eval.c). Questo tracer non ottimizza: la esegue

@@ -156,11 +156,12 @@ static Expr *assignment(Parser *p) {
 
     if (check(p, TOKEN_ASSIGN)) {
         advance(p);                       /* consuma '=' */
+        int line = p->previous.line;      /* la riga dell'=: serve a trace/why */
         Expr *value = assignment(p);      /* il valore (a destra) */
 
         if (left->type == EXPR_VARIABLE) {
             const char *name = left->as.variable.name;
-            Expr *node = ast_assign(name, (int)strlen(name), value);
+            Expr *node = ast_assign(name, (int)strlen(name), value, line);
             ast_free(left);               /* non serve piu' il nodo variabile */
             return node;
         }
@@ -419,6 +420,8 @@ static Stmt *for_statement(Parser *p);
 static Stmt *break_statement(Parser *p);
 static Stmt *continue_statement(Parser *p);
 static Stmt *recur_statement(Parser *p);
+static Stmt *trace_statement(Parser *p);
+static Stmt *why_statement(Parser *p);
 static Stmt *statement_inner(Parser *p);
 
 /* Limite all'ANNIDAMENTO delle istruzioni ({ { ... } }, if dentro if, ecc.).
@@ -458,6 +461,8 @@ static Stmt *statement_inner(Parser *p) {
     if (match(p, TOKEN_CONTINUE)) return continue_statement(p);
     if (match(p, TOKEN_RETURN)) return return_statement(p);
     if (match(p, TOKEN_RECUR))  return recur_statement(p);
+    if (match(p, TOKEN_TRACE))  return trace_statement(p);
+    if (match(p, TOKEN_WHY))    return why_statement(p);
     if (match(p, TOKEN_LBRACE)) return block_statement(p);
     return expression_statement(p);
 }
@@ -469,7 +474,7 @@ static Stmt *var_declaration(Parser *p) {
     consume(p, TOKEN_ASSIGN, "Mi aspettavo '=' dopo il nome della variabile.");
     Expr *initializer = expression(p);
     consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo la dichiarazione.");
-    return stmt_var(name.start, name.length, initializer);
+    return stmt_var(name.start, name.length, initializer, name.line);
 }
 
 /* printStmt -> "print" expression ";"   ('print' gia' consumato) */
@@ -651,6 +656,26 @@ static Stmt *recur_statement(Parser *p) {
         error_at(p, p->previous, "'recur' vuole una chiamata di funzione, es. 'recur f(x)'.");
     consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo la chiamata di 'recur'.");
     return stmt_recur(call);
+}
+
+/* traceStmt -> "trace" IDENTIFIER ";"   ('trace' gia' consumato)
+ * Attiva la registrazione della storia per una variabile: da qui in poi ogni
+ * assegnazione le aggiunge un nodo di provenienza (vedi eval.c / prov.h). */
+static Stmt *trace_statement(Parser *p) {
+    Token name = p->current;
+    consume(p, TOKEN_IDENTIFIER, "Mi aspettavo il nome di una variabile dopo 'trace'.");
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo 'trace'.");
+    return stmt_trace(name.start, name.length);
+}
+
+/* whyStmt -> "why" IDENTIFIER ";"   ('why' gia' consumato)
+ * Stampa l'albero causale di una variabile tracciata: chi le ha dato il suo
+ * valore, a partire da quali altri valori, riga per riga. */
+static Stmt *why_statement(Parser *p) {
+    Token name = p->current;
+    consume(p, TOKEN_IDENTIFIER, "Mi aspettavo il nome di una variabile dopo 'why'.");
+    consume(p, TOKEN_SEMICOLON, "Mi aspettavo ';' dopo 'why'.");
+    return stmt_why(name.start, name.length);
 }
 
 /* ------------------------------------------------------------------ */

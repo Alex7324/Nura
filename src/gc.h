@@ -18,7 +18,8 @@
 typedef enum {
     OBJ_ARRAY,
     OBJ_ENV,
-    OBJ_STRING
+    OBJ_STRING,
+    OBJ_PROV     /* nodo di provenienza (trace/why), vedi prov.h */
 } ObjType;
 
 typedef struct Obj {
@@ -27,10 +28,12 @@ typedef struct Obj {
     struct Obj *next;       /* prossimo oggetto nella lista globale          */
 } Obj;
 
-/* Dichiarazioni anticipate: gli oggetti veri sono definiti in value.h / env.h. */
+/* Dichiarazioni anticipate: gli oggetti veri sono definiti in value.h / env.h
+ * / prov.h. */
 struct Array;
 struct Env;
 struct ObjString;
+struct Prov;
 
 /* Ciclo di vita del collector. */
 void gc_init(void);       /* azzera lo stato: prima di eseguire un programma */
@@ -41,6 +44,7 @@ void gc_free_all(void);   /* libera TUTTI gli oggetti: a fine programma      */
 struct Array     *gc_new_array(void);
 struct Env       *gc_new_env(void);
 struct ObjString *gc_new_string(const char *chars, int length);
+struct Prov      *gc_new_prov(void);   /* nasce vuoto: lo riempie eval.c */
 
 /* Registra la funzione che marca le RADICI (chi e' sicuramente vivo). La chiama
  * eval.c passando una funzione che marca gli ambienti globale e corrente, ecc. */
