@@ -616,11 +616,13 @@ static void tw_put_escaped(TextWriter *w, const char *s) {
 
 static void expr_text_rec(Expr *e, TextWriter *w, int depth);
 
-/* Un figlio binario/logico va tra PARENTESI: l'albero conserva la struttura
- * ma non le parentesi originali, e "a * b + 2" scritto piatto mentirebbe
- * sull'ordine. "(a * b) + 2" invece dice la verita'. */
+/* Un figlio binario/logico/assegnamento va tra PARENTESI: l'albero conserva
+ * la struttura ma non le parentesi originali, e "a * b + 2" scritto piatto
+ * mentirebbe sull'ordine. "(a * b) + 2" invece dice la verita'. (Lo stesso
+ * per "(x = 3) + 1", che piatto si leggerebbe come x = 3 + 1.) */
 static void expr_text_child(Expr *e, TextWriter *w, int depth) {
-    int wrap = (e->type == EXPR_BINARY || e->type == EXPR_LOGICAL);
+    int wrap = (e->type == EXPR_BINARY || e->type == EXPR_LOGICAL ||
+                e->type == EXPR_ASSIGN || e->type == EXPR_INDEX_SET);
     if (wrap) tw_put(w, "(");
     expr_text_rec(e, w, depth);
     if (wrap) tw_put(w, ")");

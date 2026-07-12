@@ -249,6 +249,24 @@ check "why su var non definita"    "why boh;"            "[riga 1] Errore a runt
 # Robustezza: un ciclo LUNGO con trace non accumula memoria (tetto di storia:
 # i nodi scollegati diventano spazzatura per il GC) e il programma resta veloce.
 check "trace: ciclo lungo limitato" "var i = 0; trace i; while (i < 200000) { i = i + 1; } print i;" "200000"
+# Assegnamento ANNIDATO: il testo mostra le parentesi vere e la storia
+# dell'assegnamento interno non va persa (fluisce attraverso il bersaglio).
+check "why: assegnamento annidato" "var x = 0; trace x; x = (x = 3) + 1; why x;" "x vale 4
+  perche' (riga 1): x = (x = 3) + 1
+    dove x valeva 3
+      perche' (riga 1): x = 3"
+check "why: catena via bersaglio annidato" "var a = 10;
+var y = 0;
+trace y;
+var x = 0;
+trace x;
+x = (y = a) + 1;
+why x;" "x vale 11
+  perche' (riga 6): x = (y = a) + 1
+    dove y valeva 10
+      perche' (riga 6): y = a
+        dove a valeva 10 (riga 1)
+    dove a valeva 10 (riga 1)"
 
 echo "== Garbage collector (Fase 9) =="
 # Cicli lunghi che creano tanta spazzatura: il GC la raccoglie, il risultato

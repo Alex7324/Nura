@@ -551,7 +551,10 @@ why tot;              // spiega tot... e anche da dove veniva base
   milione di giri non si porta dietro un milione di nodi — i più vecchi
   vengono dimenticati (lo dice: *"storia piu' vecchia dimenticata"*) e la
   memoria resta piccola, perché il garbage collector li raccoglie.
-- **Si paga solo se si usa**: le variabili non tracciate non registrano nulla.
+- **Si paga solo se si usa**: le variabili non tracciate non registrano nulla
+  (overhead zero, misurato). Ogni assegnazione a una variabile *tracciata*
+  invece costruisce un nodo di storia (~microsecondi): perfetto per il
+  debugging, da non lasciare acceso nel ciclo caldo da milioni di giri.
 - `trace`/`why` vogliono una variabile **esistente**; `why` vuole una variabile
   **tracciata** (altrimenti errore, con il suggerimento di fare prima `trace`).
 - Viene registrata l'assegnazione **alla variabile intera** (`x = ...` o

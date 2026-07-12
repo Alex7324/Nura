@@ -305,6 +305,13 @@ static char *snapshot_value_text(Value v) {
     return buf;
 }
 
+/* Aggiunge un nome all'elenco delle dipendenze (se non c'e' gia' e se c'e' posto). */
+static void add_dep_name(const char *name, const char **names, int *n) {
+    for (int i = 0; i < *n; i++)
+        if (strcmp(names[i], name) == 0) return;
+    if (*n < PROV_MAX_DEPS) names[(*n)++] = name;
+}
+
 /* Raccoglie i nomi delle variabili LETTE da un'espressione (unici, al massimo
  * PROV_MAX_DEPS): sono le dipendenze del valore prodotto. I nomi puntano
  * dentro l'AST: niente da liberare. */
@@ -315,12 +322,9 @@ static void collect_deps(Expr *e, const char **names, int *n) {
         case EXPR_BOOL:
         case EXPR_STRING:
             break;   /* i letterali non dipendono da nessuno */
-        case EXPR_VARIABLE: {
-            for (int i = 0; i < *n; i++)
-                if (strcmp(names[i], e->as.variable.name) == 0) return;
-            if (*n < PROV_MAX_DEPS) names[(*n)++] = e->as.variable.name;
+        case EXPR_VARIABLE:
+            add_dep_name(e->as.variable.name, names, n);
             break;
-        }
         case EXPR_UNARY:
             collect_deps(e->as.unary.right, names, n);
             break;
@@ -333,6 +337,11 @@ static void collect_deps(Expr *e, const char **names, int *n) {
             collect_deps(e->as.logical.right, names, n);
             break;
         case EXPR_ASSIGN:
+            /* Il valore di un assegnamento annidato FLUISCE attraverso il suo
+             * bersaglio: in 'x = (y = a) + 1' la storia di x passa da y.
+             * Registro y come dipendenza (al momento della fotografia avra'
+             * gia' il valore nuovo E il suo nodo di storia: catena corretta). */
+            add_dep_name(e->as.assign.name, names, n);
             collect_deps(e->as.assign.value, names, n);
             break;
         case EXPR_CALL:
