@@ -490,6 +490,165 @@ static Value native_rand(Interp *it, int argc, Value *args) {
     return value_number((double)rand() / ((double)RAND_MAX + 1.0));
 }
 
+/* ---------------------------------------------------------------- */
+/*  Fase 15: operazioni sulle stringhe                              */
+/* ---------------------------------------------------------------- */
+
+/* Riporta un indice-double dentro [0, max] come intero (gestisce NaN/inf). */
+static int clamp_index(double d, int max) {
+    if (!isfinite(d) || d < 0) return 0;
+    if (d > max) return max;
+    return (int)d;   /* d e' gia' in [0, max]: il cast e' sicuro (tronca) */
+}
+
+static int is_spazio(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+/* sub(s, inizio, fine): sottostringa da 'inizio' (incluso) a 'fine' (escluso).
+ * Gli indici fuori dai limiti vengono "clampati", niente errore:
+ * sub("ciao", 1, 3) = "ia";  sub("ciao", 2, 99) = "ao". */
+static Value native_sub(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING) {
+        runtime_error(it, "sub() vuole una stringa come primo argomento.");
+        return value_number(0);
+    }
+    if (args[1].type != VAL_NUMBER || args[2].type != VAL_NUMBER) {
+        runtime_error(it, "sub(): inizio e fine devono essere numeri.");
+        return value_number(0);
+    }
+    ObjString *s = args[0].as.string;
+    int inizio = clamp_index(args[1].as.number, s->length);
+    int fine   = clamp_index(args[2].as.number, s->length);
+    if (fine < inizio) fine = inizio;   /* intervallo vuoto */
+    return value_string(gc_new_string(s->chars + inizio, fine - inizio));
+}
+
+/* find(s, cerca): posizione della prima occorrenza di 'cerca' in 's', -1 se
+ * assente. Una stringa vuota si "trova" sempre in posizione 0. */
+static Value native_find(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        runtime_error(it, "find() vuole due stringhe.");
+        return value_number(0);
+    }
+    ObjString *s = args[0].as.string;
+    ObjString *n = args[1].as.string;
+    if (n->length == 0) return value_number(0);
+    for (int i = 0; i + n->length <= s->length; i++) {
+        if (memcmp(s->chars + i, n->chars, (size_t)n->length) == 0) {
+            return value_number(i);
+        }
+    }
+    return value_number(-1);
+}
+
+/* upper/lower: maiuscole / minuscole. Solo ASCII (a-z <-> A-Z), per evitare le
+ * sorprese di locale e dei byte non-ASCII. */
+static Value native_upper(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING) { runtime_error(it, "upper() vuole una stringa."); return value_number(0); }
+    ObjString *s = args[0].as.string;
+    char *buf = malloc((size_t)s->length + 1);
+    if (buf == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    for (int i = 0; i < s->length; i++) {
+        char c = s->chars[i];
+        if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+        buf[i] = c;
+    }
+    ObjString *r = gc_new_string(buf, s->length);
+    free(buf);
+    return value_string(r);
+}
+static Value native_lower(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING) { runtime_error(it, "lower() vuole una stringa."); return value_number(0); }
+    ObjString *s = args[0].as.string;
+    char *buf = malloc((size_t)s->length + 1);
+    if (buf == NULL) { fprintf(stderr, "Memoria esaurita.\n"); exit(1); }
+    for (int i = 0; i < s->length; i++) {
+        char c = s->chars[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        buf[i] = c;
+    }
+    ObjString *r = gc_new_string(buf, s->length);
+    free(buf);
+    return value_string(r);
+}
+
+/* trim(s): toglie spazi, tab e a-capo all'inizio e alla fine. */
+static Value native_trim(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING) { runtime_error(it, "trim() vuole una stringa."); return value_number(0); }
+    ObjString *s = args[0].as.string;
+    int a = 0, b = s->length;
+    while (a < b && is_spazio(s->chars[a]))     a++;
+    while (b > a && is_spazio(s->chars[b - 1])) b--;
+    return value_string(gc_new_string(s->chars + a, b - a));
+}
+
+/* split(s, sep): divide 's' sui separatori 'sep' in un array di stringhe.
+ * sep vuoto -> un elemento per ogni carattere. */
+static Value native_split(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_STRING || args[1].type != VAL_STRING) {
+        runtime_error(it, "split() vuole due stringhe.");
+        return value_number(0);
+    }
+    ObjString *s = args[0].as.string;
+    ObjString *sep = args[1].as.string;
+    Array *out = array_new();
+    gc_push_temp((Obj *)out);   /* proteggo l'array mentre lo riempio */
+    if (sep->length == 0) {
+        for (int i = 0; i < s->length; i++) {
+            array_push(out, value_string(gc_new_string(s->chars + i, 1)));
+        }
+    } else {
+        int inizio = 0;
+        int i = 0;
+        while (i + sep->length <= s->length) {
+            if (memcmp(s->chars + i, sep->chars, (size_t)sep->length) == 0) {
+                array_push(out, value_string(gc_new_string(s->chars + inizio, i - inizio)));
+                i += sep->length;
+                inizio = i;
+            } else {
+                i++;
+            }
+        }
+        array_push(out, value_string(gc_new_string(s->chars + inizio, s->length - inizio)));
+    }
+    gc_pop_temp(1);
+    return value_array(out);
+}
+
+/* join(arr, sep): unisce gli elementi di un array in una stringa, separati da
+ * 'sep'. Ogni elemento e' convertito come da str() (numeri, bool, ecc.). */
+static Value native_join(Interp *it, int argc, Value *args) {
+    (void)argc;
+    if (args[0].type != VAL_ARRAY) {
+        runtime_error(it, "join() vuole un array come primo argomento.");
+        return value_number(0);
+    }
+    if (args[1].type != VAL_STRING) {
+        runtime_error(it, "join(): il separatore deve essere una stringa.");
+        return value_number(0);
+    }
+    Array *a = args[0].as.array;
+    ObjString *sep = args[1].as.string;
+    char *buf = NULL; int len = 0, cap = 0;
+    for (int i = 0; i < a->count; i++) {
+        if (i > 0) sb_append(&buf, &len, &cap, sep->chars);
+        stringify(a->items[i], &buf, &len, &cap, 0);
+    }
+    const char *chars;
+    if (buf != NULL) chars = buf;
+    else             chars = "";
+    ObjString *r = gc_new_string(chars, len);
+    free(buf);
+    return value_string(r);
+}
+
 /* Registra le native nell'ambiente globale, prima di eseguire il programma. */
 static void define_natives(Env *globals) {
     /* Semino il generatore pseudocasuale una volta, mescolando orologio di
@@ -505,6 +664,14 @@ static void define_natives(Env *globals) {
     env_define(globals, "rand",  value_native("rand",  native_rand,  0));
     env_define(globals, "clock", value_native("clock", native_clock, 0));
     env_define(globals, "input", value_native("input", native_input, 0));
+    /* Fase 15: operazioni sulle stringhe */
+    env_define(globals, "sub",   value_native("sub",   native_sub,   3));
+    env_define(globals, "find",  value_native("find",  native_find,  2));
+    env_define(globals, "split", value_native("split", native_split, 2));
+    env_define(globals, "join",  value_native("join",  native_join,  2));
+    env_define(globals, "upper", value_native("upper", native_upper, 1));
+    env_define(globals, "lower", value_native("lower", native_lower, 1));
+    env_define(globals, "trim",  value_native("trim",  native_trim,  1));
 }
 
 /* ------------------------------------------------------------------ */

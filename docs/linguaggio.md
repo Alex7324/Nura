@@ -430,6 +430,20 @@ chiamano *native*), ma si usano come qualsiasi altra funzione.
 | `clock()` | secondi di CPU dall'avvio (per misurare) |
 | `input()` | legge una riga da tastiera come stringa |
 
+Operazioni sulle stringhe (Fase 15):
+
+| Nativa | Cosa fa |
+|---|---|
+| `sub(s, inizio, fine)` | sottostringa da `inizio` (incluso) a `fine` (escluso); indici fuori limite "clampati" |
+| `find(s, cerca)` | posizione della prima occorrenza di `cerca`, `-1` se assente |
+| `split(s, sep)` | divide `s` in un **array** di stringhe (sep vuoto → un carattere per elemento) |
+| `join(arr, sep)` | unisce un array in una stringa, separati da `sep` (gli elementi passano da `str`) |
+| `upper(s)` / `lower(s)` | maiuscole / minuscole (ASCII) |
+| `trim(s)` | toglie spazi, tab e a-capo ai bordi |
+
+Esempio: `join(split(trim(riga), " "), "_")` normalizza gli spazi di una riga.
+`split` e `join` sono l'uno l'inverso dell'altro.
+
 `push` modifica l'array sul posto (per riferimento). Un dado da 1 a 6:
 `int(rand() * 6) + 1`.
 

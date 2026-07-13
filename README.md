@@ -132,6 +132,7 @@ print fattoriale(5);   // 120
 - [x] **Fase 12 — `recur` (tail-call optimization)**: chiamate in coda esplicite. `recur f(x)` riusa il frame corrente (tecnica del *trampolino*) invece di accumularne uno nuovo: la ricorsione in coda — anche mutua — è illimitata e non tocca il tetto di profondità. Il garbage collector radica la chiamata pendente (verificato con `NURA_GC_STRESS`)
 - [x] **Fase 13 — Provenienza dei valori (`trace` / `why`)**: le variabili tracciate registrano, a ogni assegnazione, un *nodo di provenienza* (espressione, riga, dipendenze con i valori di allora, fotografati in testo); `why x;` stampa l'albero causale. I nodi sono oggetti del GC con un tetto di profondità (~20): la storia resta corta e la memoria limitata anche nei cicli lunghi
 - [x] **Fase 14 — Numero di riga negli errori a runtime**: `[riga 4] Errore a runtime: divisione per zero.` L'interprete tiene la riga dell'istruzione in esecuzione (aggiornata in un punto solo) e la ripristina correttamente al ritorno dalle chiamate e nelle condizioni dei cicli
+- [x] **Fase 15 — Operazioni sulle stringhe**: un toolkit di native per il testo — `sub` (sottostringa), `find` (cerca), `split`/`join` (da/verso array, uno l'inverso dell'altro), `upper`/`lower`, `trim`. Ora il linguaggio manipola davvero le stringhe
 
 ## Come l'ho sviluppato
 

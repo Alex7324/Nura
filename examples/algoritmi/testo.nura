@@ -1,0 +1,43 @@
+// Elaborazione del testo con le native di Fase 15.
+// Esegui con:  nura examples/algoritmi/testo.nura
+
+// Mette la maiuscola all'inizio di ogni parola ("title case").
+fun titolo(frase) {
+    var parole = split(frase, " ");
+    for (var i = 0; i < len(parole); i = i + 1) {
+        var p = parole[i];
+        if (len(p) > 0) {
+            parole[i] = upper(sub(p, 0, 1)) + lower(sub(p, 1, len(p)));
+        }
+    }
+    return join(parole, " ");
+}
+
+// Conta le parole di una riga (ignorando gli spazi di troppo ai bordi).
+fun contaParole(riga) {
+    var pulita = trim(riga);
+    if (len(pulita) == 0) { return 0; }
+    return len(split(pulita, " "));
+}
+
+// Semplice "trova e sostituisci" (una occorrenza per volta, tutte).
+fun sostituisci(s, vecchio, nuovo) {
+    var out = "";
+    var pos = find(s, vecchio);
+    while (pos != -1) {
+        out = out + sub(s, 0, pos) + nuovo;
+        s = sub(s, pos + len(vecchio), len(s));
+        pos = find(s, vecchio);
+    }
+    return out + s;
+}
+
+print titolo("il gatto sul tetto");                  // Il Gatto Sul Tetto
+print "parole: " + str(contaParole("  ciao a tutti  ")); // parole: 3
+print sostituisci("banana", "a", "o");               // bonono
+print sostituisci("uno-due-tre", "-", " ");          // uno due tre
+
+// Parsing di una riga "CSV" (valori separati da virgola) in un array.
+var campi = split("mario,rossi,42,cagliari", ",");
+print "campi: " + str(campi);                        // ["mario", "rossi", "42", "cagliari"]
+print "nome: " + campi[0] + ", eta': " + campi[2];   // nome: mario, eta': 42

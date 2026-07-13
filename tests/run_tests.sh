@@ -332,6 +332,26 @@ check "escape virgolette"    'print "d\"x\"e";'      'd"x"e'
 check "escape a-capo conta 1" 'print len("a\nb");'   "3"
 check "escape sconosciuto"   'print "z\qw";'         "[riga 1] Errore di sintassi vicino a 'z\qw': sequenza di escape sconosciuta '\q'."
 
+echo "== Fase 15: operazioni sulle stringhe =="
+check "sub base"             'print sub("ciao mondo", 5, 10);'   "mondo"
+check "sub clampato"         'print sub("abc", 2, 99);'          "c"
+check "sub intervallo vuoto" 'print "[" + sub("abc", 3, 1) + "]";' "[]"
+check "find trovato"         'print find("banana", "na");'       "2"
+check "find assente"         'print find("aaa", "b");'           "-1"
+check "upper"                'print upper("Ciao");'              "CIAO"
+check "lower"                'print lower("CIAO");'              "ciao"
+check "trim"                 'print "[" + trim("  ab  ") + "]";' "[ab]"
+check "split base"           'print split("a,b,c", ",");'        '["a", "b", "c"]'
+check "split sep vuoto"      'print split("ab", "");'            '["a", "b"]'
+check "split sep assente"    'print split("xyz", "-");'          '["xyz"]'
+check "join base"            'print join(["a","b","c"], "-");'   "a-b-c"
+check "join numeri"          'print join([1,2,3], ", ");'        "1, 2, 3"
+check "split+join round trip" 'print join(split("a-b-c-d", "-"), "/");' "a/b/c/d"
+check "conta parole"         'print len(split(trim("  a b c  "), " "));' "3"
+check "sub tipo errato"      'print sub(5, 0, 1);'  "[riga 1] Errore a runtime: sub() vuole una stringa come primo argomento."
+check "find tipo errato"     'print find("x", 5);'  "[riga 1] Errore a runtime: find() vuole due stringhe."
+check "join tipo errato"     'print join(5, ",");'  "[riga 1] Errore a runtime: join() vuole un array come primo argomento."
+
 echo "== Errori a runtime =="
 check "divisione per zero"   "print 1 / 0;"       "[riga 1] Errore a runtime: divisione per zero."
 check "modulo per zero"      "print 5 % 0;"       "[riga 1] Errore a runtime: modulo per zero."
